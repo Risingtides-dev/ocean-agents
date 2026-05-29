@@ -1,0 +1,16 @@
+# Secrets & local config
+**/courier.env
+*.env
+!*.env.example
+
+# Dropbox payloads — never commit the files being shipped
+**/dropbox/*
+!**/dropbox/.gitkeep
+
+# Ledgers / runtime artifacts
+**/courier.ledger
+**/*.log
+
+# Python
+__pycache__/
+*.pyc
