@@ -8,7 +8,22 @@
 
 This repo holds **provider-agnostic agent packages** that run *on top of* the
 Ocean runtime. It is intentionally separate from `ocean-os` (which stays pure
-Rust). The first family is **couriers**.
+Rust). Two families so far: **couriers** (ship payloads outbound over a route)
+and **assistants** (brain-in-the-loop specialists that operate on a surface).
+
+## Assistants — surface specialists
+
+Brain-in-the-loop agents an operator *unlocks* by choosing them; each loads a
+**surface profile** (`assistants/<SURFACE>/system.md`) that Ocean OS prefers over
+its compiled seed prompt — editable, hot-reconfigurable, no rebuild. The surface
+*is* the program. Index: [`assistants/README.md`](assistants/README.md).
+
+| Surface | Assistant | Domain |
+|---|---|---|
+| `[BONZAI]` | bonzai | git hygiene — prune branch sprawl safely, HTML triage board, enforce merge→main→delete |
+
+More surfaces to come (content tab, campaign-booking tab, finances section — each
+a surface an agent specializes into).
 
 ## Couriers — a hub of single-purpose delivery agents
 
