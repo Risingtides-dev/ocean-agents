@@ -85,6 +85,8 @@ these consolidated house profiles are written to be the thing it loads.
 | `[SLACK]` | **SLACK** house profile | Slack-native comms (threads/DMs, mrkdwn not full Markdown, emoji-aware), canvas-rendering SOPs, inbound-only safety — the base every Slack assistant (content-agent first) loads | live (R3) |
 | `[CNVS]` | **CNVS** house profile | tldraw / spatial canvas — visual, durable artifacts; additive layout; confirm destructive board ops | live (R4 seed) |
 | `[MOBL]` | **MOBL** house profile | mobile / on-the-move — glanceable, voice-friendly, answer-first; defer bulky artifacts to richer surfaces | live (R4 seed) |
+| `[VOX]` | **VOX** house profile | voice / hands-free (`leo-voice`) — spoken-clean output (no markdown/paths/code), answer-first, barge-in-aware brevity; defer bulky output to richer surfaces | live (R4) |
+| `[BRWSR]` | **BRWSR** house profile | browser / Chrome side panel (`surface-extension`) — docked, sees the live active tab (URL/title injected per OCEAN-70), browser-tool SOPs, narrow-panel brevity | live (R4) |
 
 ## Phased delivery roadmap
 
@@ -97,10 +99,11 @@ authored here.
   profile (load-bearing: the content-agent Slack assistant depends on it). Slack is
   the first real conversational surface; its profile is complete per the design
   spec §4.
-- **R4 — next.** Flesh out **`CNVS`** (Slack/tldraw canvas rendering), **`MOBL`**
+- **R4 — current.** Flesh out **`CNVS`** (Slack/tldraw canvas rendering), **`MOBL`**
   (Ocean mobile app), **`VOX`** (`leo-voice` — hands-free voice agent), and
-  **`BRWSR`** (`surface-extension` — browser/Chrome control surface). CNVS and MOBL
-  ship a real seed profile now; VOX and BRWSR follow.
+  **`BRWSR`** (`surface-extension` — browser/Chrome control surface). All four now
+  ship real profiles: CNVS/MOBL as seeds, **VOX** (spoken-clean, barge-in-aware) and
+  **`BRWSR`** (docked side panel, live-tab-aware, browser-tool SOPs) at full depth.
 - **R5 — later.** `ACP` (`acp-zed` editor control plane), `TUI` (terminal
   cockpit), `WEB` (Ocean Surface PWA), `GUI` (GPUI native desktop), `CLI`. These
   run on Ocean OS's built-in seed prompts today; they graduate to file-loaded
