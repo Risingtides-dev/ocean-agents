@@ -107,7 +107,11 @@ def cmd_run(args):
     prompt = hit["command"].get("prompt", "").strip()
     if rest:
         prompt = (prompt + "\n\nOperator args: " + " ".join(rest)).strip()
-    payload = {"cwd": hit["dir"], "text": prompt or f"Run {slash} with the given args."}
+    payload = {
+        "cwd": hit["dir"],
+        "prompt": prompt or f"Run {slash} with the given args.",
+        "client_type": "surface-slack",
+    }
     if dry:
         print(json.dumps({"ok": True, "mode": "agentic",
                           "POST": f"{DAEMON_URL}/v1/prompt", "body": payload}, indent=2))
