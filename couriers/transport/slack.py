@@ -161,7 +161,12 @@ class Slack:
                         {"filename": path.name, "length": size})
         if not got.get("ok"):
             return got
-        upload_url, file_id = got["upload_url"], got["file_id"]
+        # Guard the fields explicitly: an ok:true response *should* carry both,
+        # but a malformed body must not None-subscript downstream (Pyright-safe).
+        upload_url = got.get("upload_url")
+        file_id = got.get("file_id")
+        if not isinstance(upload_url, str) or not isinstance(file_id, str):
+            return {"ok": False, "error": "upload_url_missing", "detail": got}
         # 2) PUT/POST the bytes to the (unauthenticated) presigned URL
         put = self._post_bytes(upload_url, path)
         if put is not True:
