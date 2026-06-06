@@ -1,29 +1,41 @@
 #!/usr/bin/env python3
 """
-Slack inbound bridge — Socket Mode listener SCAFFOLD (design spec §3, §4, §9).
+Slack inbound bridge — LIVE Socket Mode listener (design spec §3, §4, §9).
 
-The NEW inbound plumbing for the assistants class. Couriers/transport already
-handles OUTBOUND Slack I/O; nothing in the repo receives Slack *events* today.
-This is the front door: open an `xapp-` Socket Mode WebSocket, receive Slack
-events (app_mention / message.im), dedupe Slack's retries, resolve thread/DM
-context, and dispatch each turn to the Ocean daemon scoped to the agent's dir.
+The inbound plumbing for the assistants class. couriers/transport already handles
+OUTBOUND Slack I/O; this is the front door: open an `xapp-` Socket Mode WebSocket,
+receive Slack events (app_mention / message.im), ack them, dedupe Slack's retries,
+resolve thread/DM context, dispatch each turn to the Ocean daemon scoped to the
+agent's dir, and route the reply back in-thread via reply.py.
 
-STATUS: SCAFFOLD. The dedupe + context-resolution + daemon-dispatch logic is real
-and unit-testable (pure stdlib, no token). The live WebSocket open/receive loop is
-DEFERRED to build-order step 3 (spec §11) — `run()` is intentionally a stub that
-documents the contract rather than opening a live socket here. Wiring the real
-socket needs the `slack_sdk` Socket Mode client (or a raw WS over the apps.connections
-.open url) + the app token, and is gated on a real Slack app existing (spec §12).
+STATUS (OCEAN-112): LIVE. `run()` opens a Socket Mode connection (slack_sdk) and
+pumps every inbound event through:
 
-Pure stdlib. tomllib (Python 3.11+) for manifest read.
+    dedupe → resolve_context → build_turn → dispatch_to_daemon → reply.deliver
 
-Usage (scaffold):
+with reconnect/backoff on WebSocket drop and per-message fail-soft (log + skip,
+never crash the loop). The dispatch reuses OCEAN-84's HARDENED daemon invocation
+(couriers/hub/router.py: call_daemon / session_id_for / extract_reply) — we do not
+re-implement the /v1/prompt retry/timeout/error path here.
+
+The pure pieces (EventDeduper, resolve_context, build_turn, session_key,
+dispatch_to_daemon) stay stdlib + token-free so the whole pipeline is unit-testable
+with a MOCKED Slack client + mocked daemon (tests/test_socket_pipeline.py). A real
+live connection needs an `xapp-` app token + a Slack app with Socket Mode enabled
+(spec §12) — see bridge/RUN.md.
+
+Dependency: slack_sdk (Socket Mode client). Listed in bridge/requirements.txt.
+Imported lazily so the pure helpers + `resolve` self-test run without it installed.
+
+Usage:
   socket_listener.py resolve <manifest.toml>   # show the turn-scoping contract (JSON)
-  socket_listener.py run                        # NOT LIVE — prints the deferred contract
+  socket_listener.py run <manifest.toml>        # LIVE — opens the Socket Mode loop
 """
 import json
+import logging
 import os
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -36,6 +48,27 @@ except ModuleNotFoundError:  # pragma: no cover
 ASSISTANTS_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ASSISTANTS_ROOT.parent
 DAEMON_URL = os.environ.get("OCEAN_DAEMON_URL", "http://127.0.0.1:4780")
+
+# Reuse OCEAN-84's hardened daemon invocation + deterministic session-id folding
+# from the courier hub router instead of duplicating the retry/timeout/error path.
+sys.path.insert(0, str(REPO_ROOT / "couriers" / "hub"))
+try:  # pragma: no cover - exercised indirectly; guarded for import-order safety
+    from router import call_daemon as _router_call_daemon  # type: ignore
+    from router import extract_reply as _router_extract_reply  # type: ignore
+    from router import session_id_for as _router_session_id_for  # type: ignore
+except Exception:  # pragma: no cover
+    _router_call_daemon = None  # type: ignore
+    _router_extract_reply = None  # type: ignore
+    _router_session_id_for = None  # type: ignore
+
+# Reply path: daemon output → couriers/transport/slack.py (thread/DM/canvas).
+sys.path.insert(0, str(ASSISTANTS_ROOT / "bridge"))
+try:  # pragma: no cover - guarded; mocked in tests
+    import reply as _reply  # type: ignore
+except Exception:  # pragma: no cover
+    _reply = None  # type: ignore
+
+log = logging.getLogger("ocean.bridge.slack")
 
 
 class EventDeduper:
@@ -103,28 +136,259 @@ def build_turn(manifest_path: Path, event: dict) -> dict:
     agent = m.get("name", manifest_path.parent.name)
     ctx = resolve_context(event)
     cwd = surface.get("cwd") or str(manifest_path.parent.relative_to(REPO_ROOT))
+    skey = session_key(agent, ctx["channel"], ctx["thread_or_dm"])
     return {
         "cwd": str((REPO_ROOT / cwd)),
         "prompt": ctx["prompt"],
         "client_type": surface.get("client_type", "surface-slack"),
-        "session_id": session_key(agent, ctx["channel"], ctx["thread_or_dm"]),
+        # human-readable spec §5 key (logs/observability); the daemon keys on the
+        # UUIDv5 fold of it (see dispatch_to_daemon), matching OCEAN-84's router.
+        "session_key": skey,
         # carried for the reply path (not part of the daemon contract, used by reply.py)
         "_reply": {"channel": ctx["channel"], "thread_ts": ctx["thread_ts"], "is_dm": ctx["is_dm"]},
     }
 
 
+def _session_id_for(key: str) -> str:
+    """Fold a stable session key → deterministic daemon UUID. Reuse OCEAN-84's
+    router fold so a Slack thread resumes the SAME daemon session whether the turn
+    came through the courier hub or this bridge. Mirror minimally if unavailable."""
+    if _router_session_id_for is not None:
+        return _router_session_id_for(key)
+    import uuid  # pragma: no cover - fallback path only
+    ns = uuid.UUID("6f9b1e2a-0c3d-5a7b-8e4f-1a2b3c4d5e6f")
+    return str(uuid.uuid5(ns, key))
+
+
 def dispatch_to_daemon(turn: dict) -> dict:
-    """POST the turn to the Ocean daemon. The `_reply` block is stripped — it is
-    bridge-side routing, not part of the /v1/prompt contract."""
-    body = {k: v for k, v in turn.items() if not k.startswith("_")}
+    """Dispatch a built turn to the Ocean daemon, REUSING OCEAN-84's hardened
+    invocation (router.call_daemon: timeout + transient retry + typed result).
+
+    The `_reply`/`session_key` bridge-side keys are stripped; the stable session
+    key is folded into the daemon's UUID `session_id` (router.session_id_for) and
+    `create_if_missing` lets the first message in a thread reserve that id rather
+    than erroring on strict resume — exactly the courier router's payload shape.
+
+    Returns the router's typed result: {"ok": bool, "response"?: PromptResponse,
+    "kind"?, "error"?}. Never raises (the router never does).
+    """
+    skey = turn.get("session_key") or session_key(
+        "content-agent", turn.get("_reply", {}).get("channel", ""), "dm")
+    payload = {
+        "cwd": turn["cwd"],
+        "prompt": turn["prompt"],
+        "client_type": turn.get("client_type", "surface-slack"),
+        "session_id": _session_id_for(skey),
+        "create_if_missing": True,
+    }
+    if _router_call_daemon is not None:
+        return _router_call_daemon(payload)
+    # Minimal mirror only if the router import failed (keeps the bridge functional).
+    return _fallback_call_daemon(payload)  # pragma: no cover
+
+
+def _fallback_call_daemon(payload: dict) -> dict:  # pragma: no cover - import-failure path
+    """Last-resort daemon POST if the hardened router import is unavailable. Kept
+    deliberately thin — the real path is router.call_daemon (OCEAN-84)."""
     req = urllib.request.Request(
         f"{DAEMON_URL}/v1/prompt",
-        data=json.dumps(body).encode(),
+        data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=120) as r:
-        return json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            parsed = json.loads(r.read())
+        if isinstance(parsed, dict) and parsed.get("ok"):
+            return {"ok": True, "response": parsed}
+        return {"ok": False, "kind": "daemon_reported_error", "error": "ok=false", "response": parsed}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "kind": "daemon_down", "error": str(e)}
+
+
+def _reply_text_from(result: dict) -> str:
+    """Pull the agent's reply text out of the router result, type-safely (reuse
+    OCEAN-84's extract_reply over the PromptResponse)."""
+    response = result.get("response") if isinstance(result, dict) else None
+    if isinstance(response, dict) and _router_extract_reply is not None:
+        return _router_extract_reply(response)
+    if isinstance(response, dict):
+        out = response.get("stdout")
+        if isinstance(out, str) and out.strip():
+            return out.strip()
+    return "(the agent returned no text for this turn)"
+
+
+def handle_event(manifest_path: Path, event: dict, deduper: EventDeduper,
+                 deliver=None) -> dict:
+    """The ONE message-handling pipeline, surfaced as a pure-ish function so it can
+    be unit-tested end-to-end with a mocked daemon + mocked reply transport.
+
+    inbound event → dedupe → resolve_context → build_turn → dispatch_to_daemon
+    (OCEAN-84) → reply.deliver. Fail-soft: any error is caught and returned as a
+    structured skip so the live loop never crashes on one bad message (spec §9).
+
+    `deliver` is injected (defaults to reply.deliver) so tests pass a mock.
+    """
+    if deliver is None:
+        if _reply is None:  # pragma: no cover - import guard
+            return {"ok": False, "skipped": True, "reason": "reply transport unavailable"}
+        deliver = _reply.deliver
+
+    event_id = event.get("event_id") or event.get("client_msg_id") or ""
+    if deduper.is_duplicate(event_id):
+        log.info("dedupe: dropping repeat event %s", event_id)
+        return {"ok": True, "skipped": True, "reason": "duplicate", "event_id": event_id}
+
+    try:
+        turn = build_turn(manifest_path, event)
+    except Exception as e:  # noqa: BLE001
+        log.exception("build_turn failed; skipping event %s", event_id)
+        return {"ok": False, "skipped": True, "reason": f"build_turn: {e}"}
+
+    # Empty prompt (e.g. a bare mention with no text, or a bot/system message we
+    # don't want to round-trip) → skip rather than spend a daemon turn.
+    if not (turn.get("prompt") or "").strip():
+        return {"ok": True, "skipped": True, "reason": "empty prompt"}
+
+    result = dispatch_to_daemon(turn)  # OCEAN-84 hardened invocation; never raises.
+    reply_target = turn.get("_reply", {})
+
+    if not result.get("ok"):
+        # Daemon down / errored → tell the operator in-thread so it isn't silent.
+        note = f":warning: couldn't reach the agent: {result.get('error', 'unknown error')}"
+        try:
+            deliver(reply_target, {"text": note})
+        except Exception:  # noqa: BLE001
+            log.exception("failed to deliver daemon-error notice")
+        log.error("dispatch failed (%s): %s", result.get("kind"), result.get("error"))
+        return {"ok": False, "kind": result.get("kind"), "error": result.get("error")}
+
+    text = _reply_text_from(result)
+    try:
+        delivered = deliver(reply_target, {"text": text})
+    except Exception as e:  # noqa: BLE001
+        log.exception("reply delivery raised; turn completed but not delivered")
+        return {"ok": False, "delivered": False, "reason": f"deliver: {e}", "reply": text}
+
+    return {"ok": True, "delivered": bool(isinstance(delivered, dict) and delivered.get("ok")),
+            "reply": text, "delivery": delivered}
+
+
+# ---------------------------------------------------------------------------
+# Live Socket Mode loop (slack_sdk). Imported lazily so the pure helpers above
+# (and the `resolve` self-test + the unit tests) run without slack_sdk installed.
+# ---------------------------------------------------------------------------
+
+def _extract_inbound(payload: dict) -> dict | None:
+    """Normalize a slack_sdk SocketModeRequest payload into the flat event dict our
+    pipeline expects, or None if it's not an inbound message we handle.
+
+    We act on `events_api` envelopes carrying an `app_mention` or a real user
+    `message` (skip bot/self messages and message subtypes like edits/joins so we
+    don't loop on our own replies — spec §9 'no startup auto-sends' spirit).
+    """
+    if payload.get("type") != "events_api":
+        return None
+    envelope = payload.get("payload") or {}
+    event = envelope.get("event") or {}
+    etype = event.get("type")
+    if etype not in ("app_mention", "message"):
+        return None
+    # Ignore bot messages, our own messages, and non-user message subtypes.
+    if event.get("bot_id") or event.get("subtype"):
+        return None
+    # event_id lives on the outer envelope; carry it onto the flat event for dedupe.
+    flat = dict(event)
+    flat["event_id"] = envelope.get("event_id") or event.get("event_id") or ""
+    return flat
+
+
+def run(manifest_path: Path | None = None):
+    """LIVE: open the Socket Mode WebSocket and pump events through the pipeline.
+
+    Reconnect/backoff on drop; per-message fail-soft via handle_event. Requires
+    SLACK_APP_TOKEN (xapp-) + slack_sdk. The connection is the only piece that
+    needs a live token — everything it calls (handle_event → OCEAN-84 dispatch →
+    reply.deliver) is the same code the unit tests prove with mocks.
+    """
+    logging.basicConfig(
+        level=os.environ.get("OCEAN_LOG_LEVEL", "INFO"),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    if manifest_path is None:
+        # Default to the content-agent manifest (the v1 Slack assistant).
+        manifest_path = ASSISTANTS_ROOT / "content-agent" / "content-agent.toml"
+    manifest_path = Path(manifest_path).resolve()
+    if not manifest_path.exists():
+        _die(f"manifest not found: {manifest_path}")
+
+    app_token = os.environ.get("SLACK_APP_TOKEN", "").strip()
+    if not app_token.startswith("xapp-"):
+        _die("SLACK_APP_TOKEN (xapp-...) is required for Socket Mode. See bridge/RUN.md "
+             "and bridge.env.example.")
+
+    try:
+        from slack_sdk.socket_mode import SocketModeClient  # type: ignore
+        from slack_sdk.socket_mode.request import SocketModeRequest  # type: ignore
+        from slack_sdk.socket_mode.response import SocketModeResponse  # type: ignore
+        from slack_sdk.web import WebClient  # type: ignore
+    except Exception:  # noqa: BLE001
+        _die("slack_sdk not installed. `pip install -r assistants/bridge/requirements.txt` "
+             "(see bridge/RUN.md).")
+
+    bot_token = os.environ.get("OCEAN_SLACK_BOT_TOKEN") or os.environ.get("SLACK_BOT_TOKEN")
+    deduper = EventDeduper()
+
+    def _on_request(client, req):  # SocketModeClient handler signature.
+        # ACK FIRST (spec §9): ack within Slack's window so it doesn't re-deliver;
+        # dedupe still guards against the races where it does.
+        try:
+            client.send_socket_mode_response(SocketModeResponse(envelope_id=req.envelope_id))
+        except Exception:  # noqa: BLE001
+            log.exception("failed to ack envelope %s", getattr(req, "envelope_id", "?"))
+
+        event = _extract_inbound({"type": req.type, "payload": req.payload})
+        if event is None:
+            return
+        # Fail-soft: handle_event never raises, but belt-and-suspenders the loop.
+        try:
+            out = handle_event(manifest_path, event, deduper)
+            if not out.get("ok") and not out.get("skipped"):
+                log.warning("turn not delivered: %s", out)
+        except Exception:  # noqa: BLE001
+            log.exception("handle_event crashed (should be impossible); loop continues")
+
+    web = WebClient(token=bot_token) if bot_token else None
+    backoff = 1.0
+    log.info("content-agent Slack bridge starting (manifest=%s, daemon=%s)",
+             manifest_path, DAEMON_URL)
+    while True:
+        client = None
+        try:
+            client = SocketModeClient(app_token=app_token, web_client=web)
+            client.socket_mode_request_listeners.append(_on_request)
+            client.connect()
+            log.info("Socket Mode connected; listening for app_mention + message events")
+            backoff = 1.0  # reset on a healthy connect
+            # Block this thread while the WS pumps events on its own threads.
+            while client.is_connected():
+                time.sleep(1)
+            log.warning("Socket Mode disconnected; reconnecting")
+        except KeyboardInterrupt:
+            log.info("shutting down (KeyboardInterrupt)")
+            break
+        except Exception as e:  # noqa: BLE001
+            log.error("Socket Mode error: %s; reconnecting in %.1fs", e, backoff)
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 30.0)  # exponential backoff, capped
+        finally:
+            try:
+                if client is not None:
+                    client.close()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def cmd_resolve(args):
@@ -137,24 +401,8 @@ def cmd_resolve(args):
     sample = {"type": "app_mention", "channel": "C123", "user": "U1",
               "text": "make me a clip", "ts": "1700000000.000100", "event_id": "Ev1"}
     turn = build_turn(manifest, sample)
-    print(json.dumps({"ok": True, "sample_event": sample, "turn": turn}, indent=2))
-
-
-def run():
-    """DEFERRED (spec §11 step 3): open the live Socket Mode WebSocket and pump
-    events through dedupe → resolve_context → build_turn → dispatch_to_daemon →
-    reply.deliver. Not opened here — needs a real Slack app + app token (spec §12)
-    and reconnect/backoff around a `slack_sdk` SocketModeClient (or raw WS via
-    apps.connections.open). This scaffold provides every pure piece that loop needs."""
-    print(json.dumps({
-        "ok": False,
-        "status": "scaffold",
-        "deferred": "live Socket Mode loop — build-order step 3 (spec §11)",
-        "ready": ["EventDeduper", "resolve_context", "build_turn",
-                  "session_key", "dispatch_to_daemon", "reply.deliver"],
-        "needs": ["SLACK_APP_TOKEN (xapp-)", "a real Slack app w/ Socket Mode",
-                  "reconnect/backoff around the WS receive loop"],
-    }, indent=2))
+    turn_view = {**turn, "daemon_session_id": _session_id_for(turn["session_key"])}
+    print(json.dumps({"ok": True, "sample_event": sample, "turn": turn_view}, indent=2))
 
 
 def _die(msg, code=1):
@@ -170,7 +418,8 @@ def main():
     if cmd == "resolve":
         cmd_resolve(rest)
     elif cmd == "run":
-        run()
+        manifest = Path(rest[0]) if rest else None
+        run(manifest)
     else:
         _die(f"unknown command '{cmd}' (try: resolve | run)")
 
