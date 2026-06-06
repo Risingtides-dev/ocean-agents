@@ -8,11 +8,12 @@ or a canvas create/update for rich content. The bridge does NOT re-implement Sla
 I/O; the transport owns rate limits, retries, file upload, and canvas ops (spec §3
 "Reuse"). This module is the thin adapter from daemon output → transport calls.
 
-STATUS: SCAFFOLD. The routing decision (inline message vs. canvas, thread vs. DM)
-and the transport handoff are real; the wiring to the daemon's streamed output
-shape is DEFERRED to build-order step 3 (spec §11). `deliver()` documents the
-contract and routes to the transport; the canvas-vs-message heuristic is a stub the
-agent's SOPs (content-agent/SLACK/sops/) ultimately drive.
+STATUS: LIVE. This is the real outbound delivery step — `socket_listener.handle_event`
+calls `deliver()` after every daemon turn, and `deliver()` makes real Slack calls
+(post_message / create_canvas) through the transport. The routing decision (inline
+message vs. canvas, thread vs. DM) is in effect; `should_canvas()` is the bridge-side
+fallback heuristic that content-agent's SOPs (content-agent/SLACK/sops/) can override
+via the daemon output's `render`/`canvas` fields.
 
 Pure stdlib + the repo's transport. No new Slack I/O.
 """
@@ -45,14 +46,15 @@ def deliver(reply_target: dict, output: dict, token: str | None = None) -> dict:
     reply_target = {channel, thread_ts, is_dm}  (from socket_listener.build_turn _reply)
     output       = {text, render?, files?, canvas?}  (the daemon's assistant turn)
 
-    DEFERRED wiring: the exact `output` shape comes from the daemon's streamed
-    AgentTurnEvent → final text/artifacts (build-order step 3). Here we route to the
-    transport: thread/DM message, file upload, or canvas create — the real calls,
-    behind a graceful guard so the scaffold imports without a token.
+    Live delivery: `socket_listener.handle_event` calls this for every completed
+    turn. We route to the transport — thread/DM message, or canvas create + an
+    in-thread pointer — making the real Slack calls. The `Slack is None` guard only
+    fires if the transport module can't be imported (e.g. running this file in
+    isolation); in normal operation it posts to Slack.
     """
     if Slack is None:
-        return {"ok": False, "status": "scaffold",
-                "note": "transport not importable here; wire in build-order step 3"}
+        return {"ok": False, "status": "transport-unavailable",
+                "note": "couriers/transport/slack.py not importable in this context; no Slack call made"}
 
     channel = reply_target.get("channel", "")
     # In-thread reply keeps threaded convos threaded; DMs post to the DM channel.
@@ -72,12 +74,13 @@ def deliver(reply_target: dict, output: dict, token: str | None = None) -> dict:
 
 
 if __name__ == "__main__":
-    # Scaffold self-describe: no token needed, no live send.
+    # Self-describe: no token needed, no live send. (deliver() is the live path,
+    # driven by socket_listener.handle_event — this block just documents routes.)
     import json
     print(json.dumps({
-        "ok": False,
-        "status": "scaffold",
-        "deferred": "wire daemon streamed output → deliver() — build-order step 3 (spec §11)",
+        "ok": True,
+        "status": "live",
+        "entrypoint": "deliver(reply_target, output, token?) — called by socket_listener.handle_event",
         "routes": ["message (thread/DM)", "canvas (create + in-thread pointer)", "file upload (transport)"],
         "reuses": "couriers/transport/slack.py (post_message / upload_file / create_canvas)",
     }, indent=2))

@@ -47,6 +47,15 @@ $EDITOR assistants/bridge/bridge.env
 | `SLACK_APP_TOKEN` | `xapp-…` app-level token — opens the Socket Mode WS | inbound listener |
 | `SLACK_BOT_TOKEN` | `xoxb-…` bot token — posts replies | transport (outbound) |
 | `OCEAN_DAEMON_URL` | the Ocean daemon, default `http://127.0.0.1:4780` | dispatch |
+| `OCEAN_ASSISTANTS_DIR` | absolute path to **this repo's `assistants/` dir** — the profile root the daemon reads from | daemon (profile load) |
+
+> **Don't skip `OCEAN_ASSISTANTS_DIR`.** If it's unset, the daemon falls back to
+> `~/.config/ocean-rs/assistants` and never loads this repo's authored Slack
+> profile (`assistants/SLACK/system.md`) — the bot then silently runs the generic
+> compiled-in seed prompt instead of the content-agent persona. Point it at this
+> repo's `assistants/` directory (or symlink that dir into the config path). See
+> [`docs/DAEMON_INTERACTION.md`](../../docs/DAEMON_INTERACTION.md) §"Where the
+> daemon reads from".
 
 Optional tuning (env, all have sane defaults):
 
