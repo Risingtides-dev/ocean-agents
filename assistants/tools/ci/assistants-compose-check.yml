@@ -1,0 +1,66 @@
+name: assistants-compose-check
+
+# ACTIVATION: move this file to .github/workflows/assistants-compose-check.yml to
+# enable it as a GitHub Actions workflow:
+#   git mv assistants/tools/ci/assistants-compose-check.yml \
+#          .github/workflows/assistants-compose-check.yml
+# It ships here (not under .github/workflows/) because creating workflow files
+# requires a GitHub token with the `workflow` OAuth scope, which the authoring
+# session did not have. The local gates (pre-commit hook + `make assistants-check`)
+# enforce the same drift check today; this is the CI counterpart, one `git mv` away.
+#
+# Drift gate for the base-profile composition (OCEAN-89, on top of OCEAN-80).
+#
+# The Ocean daemon loads ONE published file per surface — assistants/<SURFACE>/system.md.
+# That file is a COMPOSED ARTIFACT assembled by assistants/tools/compose_profile.py
+# from _shared/system.md + _base/<SURFACE>/*.md (+ optional agent overrides). If
+# someone hand-edits a published system.md without updating its _base sources (or
+# forgets to re-run the composer after editing the sources), the published file
+# drifts from its source of truth. This job catches that drift and fails the build,
+# so the daemon never ships a stale or hand-mutated profile.
+
+on:
+  push:
+    paths:
+      - "assistants/**"
+      - ".github/workflows/assistants-compose-check.yml"
+  pull_request:
+    paths:
+      - "assistants/**"
+      - ".github/workflows/assistants-compose-check.yml"
+
+jobs:
+  compose-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile the composer (syntax gate)
+        run: python3 -m py_compile assistants/tools/compose_profile.py
+
+      - name: Check every surface profile is current with its _base sources
+        # `--check` with no surface argument verifies EVERY authored surface and
+        # exits non-zero on the first drift, failing the job.
+        run: python3 assistants/tools/compose_profile.py --check
+
+      - name: Confirm every published system.md is non-empty (daemon depends on it)
+        run: |
+          set -euo pipefail
+          fail=0
+          for f in $(git ls-files 'assistants/*/system.md'); do
+            case "$f" in
+              assistants/_base/*|assistants/_shared/*) continue ;;
+            esac
+            if [ ! -s "$f" ]; then
+              echo "EMPTY published profile (daemon would load blank): $f"
+              fail=1
+            else
+              echo "OK non-empty: $f ($(wc -l < "$f") lines)"
+            fi
+          done
+          exit $fail

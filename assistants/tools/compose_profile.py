@@ -40,7 +40,8 @@ Pure stdlib. Usage:
   compose_profile.py SLACK                          # print composed house profile
   compose_profile.py SLACK --agent content-agent    # + agent overrides
   compose_profile.py SLACK --agent content-agent --write   # publish the file
-  compose_profile.py --check SLACK                  # verify a published file is current
+  compose_profile.py --check SLACK                  # verify ONE published file is current
+  compose_profile.py --check                        # verify EVERY surface (CI drift gate)
 """
 import sys
 from pathlib import Path
@@ -52,7 +53,25 @@ BASE = ASSISTANTS_ROOT / "_base"
 # House SOP files for a surface, in composition order. system.md first (the role),
 # then the focused SOP files. Extra .md files in the surface dir are appended
 # alphabetically after these named ones.
-BASE_ORDER = ["system.md", "comms.md", "canvas.md", "limits.md"]
+#
+# The named set covers the section vocabulary used across the authored surfaces:
+#   system  — the surface role + the surface's defining rule (always first)
+#   comms   — how to talk / answer / format on this surface (style, brevity)
+#   canvas  — rich-rendering / spatial / artifact SOPs (Slack canvas, tldraw board)
+#   tools   — surface-specific shape of the tool/action SOPs (browser tools, etc.)
+#   limits  — format constraints, rate limits, the don't-do-on-this-surface list
+#   safety  — the surface-specific shape of the safety invariants
+#   vibe    — the closing "what a great teammate on this surface feels like"
+# Any other .md in the surface dir is appended alphabetically after these.
+BASE_ORDER = [
+    "system.md",
+    "comms.md",
+    "canvas.md",
+    "tools.md",
+    "limits.md",
+    "safety.md",
+    "vibe.md",
+]
 
 BANNER = (
     "<!-- COMPOSED by assistants/tools/compose_profile.py — do not edit by hand.\n"
@@ -105,6 +124,28 @@ def _target(surface: str, agent: str | None) -> Path:
     return ASSISTANTS_ROOT / surface / "system.md"
 
 
+def _all_surfaces() -> list[str]:
+    """Every surface that has a `_base/<SURFACE>/` source dir, sorted."""
+    if not BASE.is_dir():
+        return []
+    return sorted(p.name for p in BASE.iterdir() if p.is_dir())
+
+
+def _check_one(surface: str, agent: str | None) -> bool:
+    """Return True if the published file matches its composed sources.
+
+    A non-empty published file is REQUIRED — the daemon loads it. An empty or
+    missing target fails the check even if (degenerately) the composed string were
+    also empty, so CI can never green-light a surface the daemon would read blank.
+    """
+    composed = compose(surface, agent)
+    tgt = _target(surface, agent)
+    current = _read(tgt)
+    ok = bool(current.strip()) and current.strip() == composed.strip()
+    print(f"{'OK' if ok else 'STALE'}: {tgt}")
+    return ok
+
+
 def main(argv: list[str]) -> int:
     args = list(argv)
     check = "--check" in args
@@ -115,18 +156,28 @@ def main(argv: list[str]) -> int:
         i = args.index("--agent")
         agent = args[i + 1] if i + 1 < len(args) else None
         del args[i:i + 2]
+
+    # `--check` with no surface = check EVERY authored surface (CI drift gate).
+    if check and not args:
+        surfaces = _all_surfaces()
+        if not surfaces:
+            print("no surfaces found under _base/")
+            return 1
+        all_ok = True
+        for s in surfaces:
+            if not _check_one(s, agent):
+                all_ok = False
+        return 0 if all_ok else 2
+
     if not args:
         print(__doc__)
         return 0
     surface = args[0]
-    composed = compose(surface, agent)
 
     if check:
-        tgt = _target(surface, agent)
-        current = _read(tgt)
-        ok = current.strip() == composed.strip()
-        print(f"{'OK' if ok else 'STALE'}: {tgt}")
-        return 0 if ok else 2
+        return 0 if _check_one(surface, agent) else 2
+
+    composed = compose(surface, agent)
 
     if write:
         tgt = _target(surface, agent)

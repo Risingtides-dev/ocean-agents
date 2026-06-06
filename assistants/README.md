@@ -83,11 +83,52 @@ is **flat** — the rich `_base/` composition the spec wants is not runtime-side
 To make the DRY pattern **real today** without a Rust change, ocean-agents assembles
 the base itself with [`tools/compose_profile.py`](tools/compose_profile.py) — option
 **(b)** from §4/§13 (path-resolve + concatenate; no symlink sprawl; base read-only).
-It composes `_shared/system.md` + `_base/<SURFACE>/{system,comms,canvas,limits}.md`
+It composes `_shared/system.md` + `_base/<SURFACE>/{system,comms,canvas,tools,limits,safety,vibe}.md`
 (+ optional `<agent>/<SURFACE>/system.md`) into the single `assistants/<SURFACE>/system.md`
 the daemon loads. That published file is a **composed artifact — do not hand-edit it**;
 edit the sources and re-run `compose_profile.py <SURFACE> --write` (CI gate:
-`--check <SURFACE>`). When ocean-os ships runtime composition, the composer retires.
+`--check`). When ocean-os ships runtime composition, the composer retires.
+
+**Applied to every authored surface (OCEAN-89).** OCEAN-80 split `SLACK` into
+`_base/SLACK/`. OCEAN-89 extends the same pattern to **all** the authored house
+surfaces — `VOX`, `BRWSR`, `CNVS`, `MOBL` — so each one's house rules now live as
+`_base/<SURFACE>/*.md` sources and the published `assistants/<SURFACE>/system.md` is
+the composed output (which now also carries the `_shared/` core, prepended by the
+composer). The house invariants live **once** in `_shared/system.md`; no surface
+restates them. Per-surface section files follow a small shared vocabulary —
+`system.md` (role), `comms.md` (talk/format), `canvas.md` (rich/spatial rendering),
+`tools.md` (tool SOPs), `limits.md` (format/rate rules), `safety.md` (the
+surface-specific shape of the safety invariants), `vibe.md` (the closing) — composed
+in that order, with any other `.md` appended alphabetically.
+
+### Authoring flow — how to change a surface profile
+
+The published `assistants/<SURFACE>/system.md` is generated; **never hand-edit it.**
+To change how an assistant behaves on a surface:
+
+1. **Edit the source(s)** under `assistants/_base/<SURFACE>/` (or `_shared/system.md`
+   for a rule that's true on *every* surface, written once).
+2. **Re-compose** the published file:
+   `python3 assistants/tools/compose_profile.py <SURFACE> --write`
+   (for an agent override: add `--agent <agent>`).
+3. **Commit BOTH** the edited `_base/<SURFACE>/*.md` source(s) **and** the regenerated
+   `assistants/<SURFACE>/system.md` together.
+
+Then the drift gate keeps source and output in lockstep:
+
+- `python3 assistants/tools/compose_profile.py --check` — verifies **every** surface's
+  published file matches its sources and is non-empty (exits non-zero on drift).
+  `--check <SURFACE>` checks one. Wired as `make assistants-check` and a pre-commit
+  hook (`.pre-commit-config.yaml`) — both active today. A CI counterpart ships at
+  `assistants/tools/ci/assistants-compose-check.yml`; `git mv` it to
+  `.github/workflows/` to enable it (it's staged outside `.github/workflows/` because
+  creating workflow files needs a token with the `workflow` OAuth scope). A
+  hand-edited published file is caught by any of these and fails the gate.
+
+> **Why the published file must never go empty or stale:** the Ocean daemon loads
+> exactly `assistants/<SURFACE>/system.md` at turn time. An absent, empty, or stale
+> profile is what the agent actually runs on that surface — so the composer always
+> publishes the full composed text, and `--check` fails any empty/missing target.
 
 ## Registry
 
@@ -96,10 +137,10 @@ edit the sources and re-run `compose_profile.py <SURFACE> --write` (CI gate:
 | `[BONZAI]` | **bonzai** | git hygiene / worktree — prune branch sprawl safely; HTML triage board; enforce merge→main→delete | live (R3) |
 | `[SLACK]` | **SLACK** house profile | Slack-native comms (threads/DMs, mrkdwn not full Markdown, emoji-aware), canvas-rendering SOPs, inbound-only safety — the base every Slack assistant loads. Now sourced DRY from `_base/SLACK/{system,comms,canvas,limits}.md` via the composer; `SLACK/system.md` is the composed artifact | live (R5) |
 | `[SLACK]` | **content-agent** | conversational content-pipeline assistant: generate video, chat/Q&A, gallery/status, canvas rendering — calls the content-posting-lab API; identity + `SLACK/` overrides + `tools.toml` + pipeline SOPs + inbound `bridge/` (Socket Mode) scaffolded, live Slack wiring deferred | scaffold (R5, OCEAN-80) |
-| `[CNVS]` | **CNVS** house profile | tldraw / spatial canvas — visual, durable artifacts; additive layout; confirm destructive board ops | live (R4 seed) |
-| `[MOBL]` | **MOBL** house profile | mobile / on-the-move — glanceable, voice-friendly, answer-first; defer bulky artifacts to richer surfaces | live (R4 seed) |
-| `[VOX]` | **VOX** house profile | voice / hands-free (`leo-voice`) — spoken-clean output (no markdown/paths/code), answer-first, barge-in-aware brevity; defer bulky output to richer surfaces | live (R4) |
-| `[BRWSR]` | **BRWSR** house profile | browser / Chrome side panel (`surface-extension`) — docked, sees the live active tab (URL/title injected per OCEAN-70), browser-tool SOPs, narrow-panel brevity | live (R4) |
+| `[CNVS]` | **CNVS** house profile | tldraw / spatial canvas — visual, durable artifacts; additive layout; confirm destructive board ops. Sourced DRY from `_base/CNVS/{system,canvas,vibe}.md`; `CNVS/system.md` is the composed artifact | live (R4 seed, OCEAN-89) |
+| `[MOBL]` | **MOBL** house profile | mobile / on-the-move — glanceable, voice-friendly, answer-first; defer bulky artifacts to richer surfaces. Sourced DRY from `_base/MOBL/{system,comms,vibe}.md`; `MOBL/system.md` is the composed artifact | live (R4 seed, OCEAN-89) |
+| `[VOX]` | **VOX** house profile | voice / hands-free (`leo-voice`) — spoken-clean output (no markdown/paths/code), answer-first, barge-in-aware brevity; defer bulky output to richer surfaces. Sourced DRY from `_base/VOX/{system,comms,safety,vibe}.md`; `VOX/system.md` is the composed artifact | live (R4, OCEAN-89) |
+| `[BRWSR]` | **BRWSR** house profile | browser / Chrome side panel (`surface-extension`) — docked, sees the live active tab (URL/title injected per OCEAN-70), browser-tool SOPs, narrow-panel brevity. Sourced DRY from `_base/BRWSR/{system,comms,tools,safety,vibe}.md`; `BRWSR/system.md` is the composed artifact | live (R4, OCEAN-89) |
 
 ## Phased delivery roadmap
 
