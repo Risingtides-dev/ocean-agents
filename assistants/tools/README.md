@@ -24,8 +24,14 @@ done in agents-space.
 
 1. `_shared/system.md` — cross-surface house core
 2. `_base/<SURFACE>/system.md` — per-surface house role
-3. `_base/<SURFACE>/{comms,canvas,limits,…}.md` — house SOP split
+3. `_base/<SURFACE>/{comms,canvas,tools,limits,safety,vibe,…}.md` — house SOP split,
+   composed in that named order; any other `.md` is appended alphabetically
 4. (optional) `<agent>/<SURFACE>/system.md` — agent-specific overrides
+
+The named section vocabulary (`BASE_ORDER` in the composer): `system` (role) →
+`comms` (talk/format) → `canvas` (rich/spatial rendering) → `tools` (tool SOPs) →
+`limits` (format/rate rules) → `safety` (surface-specific shape of the safety
+invariants) → `vibe` (the closing). A surface uses only the files it needs.
 
 ### Usage
 
@@ -39,12 +45,22 @@ python3 assistants/tools/compose_profile.py SLACK --agent content-agent
 # Publish the daemon-loaded house profile (assistants/SLACK/system.md)
 python3 assistants/tools/compose_profile.py SLACK --write
 
-# Verify a published file is current with its sources (CI gate)
+# Verify ONE published file is current with its sources
 python3 assistants/tools/compose_profile.py --check SLACK
+
+# Verify EVERY surface (the CI / pre-commit drift gate) — no surface argument
+python3 assistants/tools/compose_profile.py --check
 ```
 
-`assistants/SLACK/system.md` is a **composed artifact** — do not hand-edit it. Edit
-the sources (`_shared/system.md`, `_base/SLACK/*.md`) and re-run with `--write`.
+`assistants/<SURFACE>/system.md` is a **composed artifact** — do not hand-edit it.
+Edit the sources (`_shared/system.md`, `_base/<SURFACE>/*.md`) and re-run with
+`--write`, then commit both. `--check` (no surface) checks all surfaces, fails on
+drift, and also fails any published file that is empty or missing — the daemon loads
+that file at turn time, so it must never go blank. The gate runs as a pre-commit hook
+(`.pre-commit-config.yaml`) and via `make assistants-check` (both active). The CI
+counterpart ships at `assistants/tools/ci/assistants-compose-check.yml`; `git mv` it
+into `.github/workflows/` to enable it (staged outside `.github/workflows/` because
+creating workflow files needs a token with the `workflow` OAuth scope).
 
 > **When ocean-os ships runtime composition** (the parked symlink-vs-resolver), the
 > daemon will compose `_shared` + `_base/<SURFACE>` + `<agent>/<SURFACE>` itself and
