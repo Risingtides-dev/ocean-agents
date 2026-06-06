@@ -69,20 +69,33 @@ The goal is **no duplication of house rules across profiles.** Two layers do tha
    `_base/<SURFACE>/` per the spec. Either way the principle holds: **common rules
    live once; per-agent files hold only deltas.**
 
-**Composition / injection.** The spec leaves the injection mechanism as an open
-item owned by Ocean OS (§4, §13): either **symlink** `_base/<SURFACE>` into a named
-agent's dir so `load_project_prompt`'s ancestor-walk picks it up, or have the
-runtime **path-resolve** `assistants/<surface_dir>` by the `client_type→dir` map
-and concatenate (spec's recommendation — no symlink sprawl, base stays read-only).
-Until that lands, the daemon's R2 path simply prefers `assistants/<DIR>/system.md`;
-these consolidated house profiles are written to be the thing it loads.
+**Composition / injection — resolved (OCEAN-80).** The spec left the injection
+mechanism as an open item owned by Ocean OS (§4, §13). Verified against the live
+daemon (`ocean-os crates/ocean-agent/src/lib.rs`): `build_system_prompt` =
+`BASE_SYSTEM_PROMPT` + `load_project_prompt(cwd)` (ancestor-walks `AGENTS.md`/
+`CLAUDE.md` **only**) + `append_client_type`, and `append_client_type` →
+`load_surface_profile_from` reads **exactly one** file, `assistants/<SURFACE>/system.md`.
+It does **not** read `_shared/`, does **not** path-resolve `_base/<SURFACE>/`, does
+**not** concatenate. The daemon's own `surface_dir` doc comment confirms the
+symlink-vs-resolver composition is *"Still parked for John."* So the daemon layering
+is **flat** — the rich `_base/` composition the spec wants is not runtime-side yet.
+
+To make the DRY pattern **real today** without a Rust change, ocean-agents assembles
+the base itself with [`tools/compose_profile.py`](tools/compose_profile.py) — option
+**(b)** from §4/§13 (path-resolve + concatenate; no symlink sprawl; base read-only).
+It composes `_shared/system.md` + `_base/<SURFACE>/{system,comms,canvas,limits}.md`
+(+ optional `<agent>/<SURFACE>/system.md`) into the single `assistants/<SURFACE>/system.md`
+the daemon loads. That published file is a **composed artifact — do not hand-edit it**;
+edit the sources and re-run `compose_profile.py <SURFACE> --write` (CI gate:
+`--check <SURFACE>`). When ocean-os ships runtime composition, the composer retires.
 
 ## Registry
 
 | Surface flag | Profile / Assistant | Domain | Status |
 |---|---|---|---|
 | `[BONZAI]` | **bonzai** | git hygiene / worktree — prune branch sprawl safely; HTML triage board; enforce merge→main→delete | live (R3) |
-| `[SLACK]` | **SLACK** house profile | Slack-native comms (threads/DMs, mrkdwn not full Markdown, emoji-aware), canvas-rendering SOPs, inbound-only safety — the base every Slack assistant (content-agent first) loads | live (R3) |
+| `[SLACK]` | **SLACK** house profile | Slack-native comms (threads/DMs, mrkdwn not full Markdown, emoji-aware), canvas-rendering SOPs, inbound-only safety — the base every Slack assistant loads. Now sourced DRY from `_base/SLACK/{system,comms,canvas,limits}.md` via the composer; `SLACK/system.md` is the composed artifact | live (R5) |
+| `[SLACK]` | **content-agent** | conversational content-pipeline assistant: generate video, chat/Q&A, gallery/status, canvas rendering — calls the content-posting-lab API; identity + `SLACK/` overrides + `tools.toml` + pipeline SOPs + inbound `bridge/` (Socket Mode) scaffolded, live Slack wiring deferred | scaffold (R5, OCEAN-80) |
 | `[CNVS]` | **CNVS** house profile | tldraw / spatial canvas — visual, durable artifacts; additive layout; confirm destructive board ops | live (R4 seed) |
 | `[MOBL]` | **MOBL** house profile | mobile / on-the-move — glanceable, voice-friendly, answer-first; defer bulky artifacts to richer surfaces | live (R4 seed) |
 | `[VOX]` | **VOX** house profile | voice / hands-free (`leo-voice`) — spoken-clean output (no markdown/paths/code), answer-first, barge-in-aware brevity; defer bulky output to richer surfaces | live (R4) |
