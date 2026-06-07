@@ -56,10 +56,18 @@ try:  # pragma: no cover - exercised indirectly; guarded for import-order safety
     from router import call_daemon as _router_call_daemon  # type: ignore
     from router import extract_reply as _router_extract_reply  # type: ignore
     from router import session_id_for as _router_session_id_for  # type: ignore
-except Exception:  # pragma: no cover
+    _router_import_error: Exception | None = None
+except Exception as _e:  # pragma: no cover
+    # The hardened OCEAN-84 daemon path (timeout + transient retry + typed result)
+    # could not be imported. We fall through to the thin `_fallback_call_daemon`
+    # below, which has NO retry/timeout hardening. Don't swallow this silently:
+    # stash the error so run() can WARN once at startup, so operators can tell
+    # "import failed, running the un-hardened fallback" apart from "daemon
+    # transiently down". Behavior is unchanged — only made observable.
     _router_call_daemon = None  # type: ignore
     _router_extract_reply = None  # type: ignore
     _router_session_id_for = None  # type: ignore
+    _router_import_error = _e
 
 # Reply path: daemon output → couriers/transport/slack.py (thread/DM/canvas).
 sys.path.insert(0, str(ASSISTANTS_ROOT / "bridge"))
@@ -69,6 +77,25 @@ except Exception:  # pragma: no cover
     _reply = None  # type: ignore
 
 log = logging.getLogger("ocean.bridge.slack")
+
+# Known surface client_types — mirrors ocean-os surface_flag()/surface_dir()
+# (crates/ocean-agent/src/lib.rs). A manifest declaring a client_type OUTSIDE this
+# set would silently degrade to the daemon's generic "unknown client" fallback
+# (losing the [SLACK]/surface profile), so we validate at startup (fix 4). Keep this
+# in sync with the daemon's match arms.
+KNOWN_CLIENT_TYPES = frozenset({
+    "surface-extension",  # BRWSR
+    "tui",                # TUI
+    "surface-web",        # WEB
+    "surface-gpui",       # GUI
+    "surface-native",     # GUI
+    "cli",                # CLI
+    "leo-voice",          # VOX
+    "acp-zed",            # ACP
+    "surface-slack",      # SLACK
+    "surface-canvas",     # CNVS
+    "surface-mobile",     # MOBL
+})
 
 
 class EventDeduper:
@@ -184,6 +211,13 @@ def dispatch_to_daemon(turn: dict) -> dict:
     if _router_call_daemon is not None:
         return _router_call_daemon(payload)
     # Minimal mirror only if the router import failed (keeps the bridge functional).
+    # WARN so this is observable: we're on the un-hardened fallback (no transient
+    # retry, fixed 120s timeout) because the OCEAN-84 router import failed — not
+    # because the daemon is transiently down. (Behavior unchanged; just surfaced.)
+    log.warning(
+        "router import unavailable (%s); using un-hardened _fallback_call_daemon "
+        "(no retry/timeout hardening)", _router_import_error,
+    )
     return _fallback_call_daemon(payload)  # pragma: no cover
 
 
@@ -323,6 +357,50 @@ def run(manifest_path: Path | None = None):
     manifest_path = Path(manifest_path).resolve()
     if not manifest_path.exists():
         _die(f"manifest not found: {manifest_path}")
+
+    # Fix 2: warn if the daemon won't load THIS repo's authored surface profiles.
+    # The daemon resolves authored profiles from OCEAN_ASSISTANTS_DIR (ocean-os
+    # assistants_root()); if it's unset or points elsewhere, the daemon falls back
+    # to its compiled-in seed prompts and never sees assistants/SLACK/system.md et al.
+    env_assistants_dir = os.environ.get("OCEAN_ASSISTANTS_DIR", "").strip()
+    if not env_assistants_dir:
+        log.warning(
+            "OCEAN_ASSISTANTS_DIR is unset — the daemon will use its compiled-in "
+            "surface prompts and will NOT load this repo's authored profiles. "
+            "Set OCEAN_ASSISTANTS_DIR=%s so the daemon loads them.", ASSISTANTS_ROOT,
+        )
+    else:
+        try:
+            mismatch = Path(env_assistants_dir).resolve() != ASSISTANTS_ROOT.resolve()
+        except Exception:  # noqa: BLE001
+            mismatch = True
+        if mismatch:
+            log.warning(
+                "OCEAN_ASSISTANTS_DIR=%s differs from this bridge's ASSISTANTS_ROOT "
+                "(%s) — the daemon won't load this repo's authored profiles. "
+                "Set OCEAN_ASSISTANTS_DIR=%s to load them.",
+                env_assistants_dir, ASSISTANTS_ROOT, ASSISTANTS_ROOT,
+            )
+
+    # Fix 4: validate the manifest's declared client_type against the known surface
+    # set. A typo (e.g. "surface-slak") would silently degrade to the daemon's
+    # generic "unknown client" fallback, losing the [SLACK] surface profile — fail
+    # loud at startup instead.
+    try:
+        with manifest_path.open("rb") as _fh:
+            _manifest = tomllib.load(_fh)
+        _declared = (_manifest.get("surface", {}).get("SLACK", {})
+                     .get("client_type", "surface-slack"))
+    except Exception as e:  # noqa: BLE001
+        _die(f"could not read client_type from manifest {manifest_path}: {e}")
+    if _declared not in KNOWN_CLIENT_TYPES:
+        log.error(
+            "manifest %s declares unknown client_type %r — not in the known surface "
+            "set %s; refusing to start so it doesn't silently fall back to the "
+            "daemon's unknown-client prompt. Fix the manifest's [surface.SLACK] "
+            "client_type.", manifest_path, _declared, sorted(KNOWN_CLIENT_TYPES),
+        )
+        _die(f"unknown client_type {_declared!r} in {manifest_path}")
 
     app_token = os.environ.get("SLACK_APP_TOKEN", "").strip()
     if not app_token.startswith("xapp-"):
