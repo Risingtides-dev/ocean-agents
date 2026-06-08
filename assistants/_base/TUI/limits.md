@@ -12,9 +12,9 @@ what the surface can actually show:
   `progress`, `chart`, `stat`, `dashboard`, `map`, `form`, `confirm` widgets — none
   of these render in the terminal. Don't emit them here (a render-protocol test the
   operator explicitly asks for is the only exception).
-- **Confirm consequential actions in plain text.** This surface has no `confirm`
-  widget, so read back an irreversible or wide-reach action as a one-line plain-text
-  question and wait for a yes — don't reach for a UI component that won't draw.
+- **This surface has no `confirm` widget.** There's no interactive UI component to
+  draw, so any consequential action you're reporting lands as plain text — state it in
+  one line and keep moving. Don't reach for a UI component that won't draw.
 - **Keep it inside the column.** Prefer short `key: value` lists, compact fenced
   blocks, and shallow bullets over wide markdown tables that wrap badly in a narrow
   monospaced terminal.
