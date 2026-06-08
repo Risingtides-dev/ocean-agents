@@ -53,10 +53,13 @@ Two kinds of entry live side by side here:
 The goal is **no duplication of house rules across profiles.** Two layers do that:
 
 1. **`_shared/system.md` — cross-surface core.** Surface-agnostic assistant
-   identity + universal invariants (confirm irreversible actions, drive the
-   deterministic harness, stay in your surface, never force-push or touch
-   production unasked). Composed *under* every surface profile. Write a house rule
-   that's true everywhere **here, once.**
+   identity + the agency doctrine (you have permissions and agency; when the
+   operator tells you to do something, do it — don't ask permission for work you've
+   been asked to do). The universal invariants are the *floor, not a leash*: only
+   two hard guardrails — never leak secrets, and don't destroy work unasked (no
+   force-push / rm -rf / production-data damage unless explicitly told). Composed
+   *under* every surface profile. Write a house rule that's true everywhere **here,
+   once.**
 
 2. **`_base/<SURFACE>/` — per-surface house SOPs (design-spec direction, §4).** The
    spec defines a richer base where each surface's shared SOPs are split into

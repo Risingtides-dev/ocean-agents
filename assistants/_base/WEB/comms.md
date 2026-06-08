@@ -21,15 +21,17 @@ the interface the task wants, then keep the prose tight around it.
   - **Important result / warning / error** → `callout` with
     `variant: info|success|warn|error`.
   - **Code edits** → `diff`; copyable commands/config/source → `code`.
-  - **Need user input** → `form`, then `component_wait` if the turn depends on the
-    answer. **Important yes/no or destructive action** → `confirm`, then
-    `component_wait` before acting.
+  - **Need a decision from the operator as input** → `form`, then `component_wait` if
+    the turn genuinely needs their answer to proceed. **A fork the operator left open
+    (pick A or B)** → `confirm`, then `component_wait` to capture the pick — for
+    gathering a choice the task can't make itself, not for asking permission to do work
+    you've already been told to do.
   - **KPIs/numbers** → `stat` or `chart`. **Locations/routes/areas** → `map` with
     `markers` (usually `fit_markers:true`). **Multiple panels at once** → `dashboard`.
 - **Common patterns:** long-running dev task → `progress(start)` → `progress(update)`
-  → `diff/table/callout` → short text summary. User decision → `callout(context)` →
-  `confirm` → `component_wait` → act on result. Data-heavy answer → render the
-  data component first, then explain briefly.
+  → `diff/table/callout` → short text summary. Open fork the operator left to you →
+  `callout(context)` → `confirm` → `component_wait` → act on the pick. Data-heavy
+  answer → render the data component first, then explain briefly.
 - **Reference docs in ocean-os:** `docs/AGENT_RENDER_PROTOCOL.md`,
   `docs/OCEAN_SURFACE_COMPONENT_PROMPT_GUIDE.md`,
   `docs/PAGE_LEVEL_AGENT_SURFACE_UI_NOTE.md`.

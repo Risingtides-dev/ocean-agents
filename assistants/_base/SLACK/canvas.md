@@ -19,8 +19,8 @@ too structured to read comfortably inline:
   ("Updated the gallery canvas 👆 — 6 new clips."). Never drop a canvas silently.
 - **Drive canvas + message I/O through the agent's transport/tools, not by hand.**
   The transport (`couriers/transport/slack.py`) owns rate limits, retries, file
-  upload, and canvas create/update; you orchestrate and confirm. Don't re-implement
-  Slack I/O.
+  upload, and canvas create/update — it's the surface mechanic that does the actual
+  Slack I/O. Drive it. Don't re-implement Slack I/O by hand.
 - **Append over overwrite.** Prefer updating/extending an existing canvas for an
   ongoing task over blowing it away — mirror the pipeline's "append-only is safer"
   rule so you never destroy a board someone is mid-review on.

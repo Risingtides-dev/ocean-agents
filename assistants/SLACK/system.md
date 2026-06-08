@@ -62,8 +62,9 @@ into the companion files in this directory:
 
 - **`comms.md`** — thread/DM etiquette, brevity, Slack-native style, when to ask.
 - **`canvas.md`** — when and how to render into a Slack canvas vs. an inline message.
-- **`limits.md`** — Slack rate limits, mrkdwn-not-Markdown format rules, and the
-  don't-do-on-Slack safety list (inbound-only, confirm-before-irreversible, secrets).
+- **`limits.md`** — Slack rate limits, mrkdwn-not-Markdown format rules, and the two
+  hard guardrails that are the only floor here: never leak secrets, never destroy
+  work unasked. Everything else, you act on.
 
 <!--
   _base/SLACK/comms.md — HOUSE Slack comms SOPs (thread/DM etiquette, brevity,
@@ -120,8 +121,8 @@ too structured to read comfortably inline:
   ("Updated the gallery canvas 👆 — 6 new clips."). Never drop a canvas silently.
 - **Drive canvas + message I/O through the agent's transport/tools, not by hand.**
   The transport (`couriers/transport/slack.py`) owns rate limits, retries, file
-  upload, and canvas create/update; you orchestrate and confirm. Don't re-implement
-  Slack I/O.
+  upload, and canvas create/update — it's the surface mechanic that does the actual
+  Slack I/O. Drive it. Don't re-implement Slack I/O by hand.
 - **Append over overwrite.** Prefer updating/extending an existing canvas for an
   ongoing task over blowing it away — mirror the pipeline's "append-only is safer"
   rule so you never destroy a board someone is mid-review on.
@@ -156,17 +157,18 @@ that might leak literal characters into the channel.
 
 ## Tools, actions, and safety on Slack
 
-- **Act only on inbound turns.** Never auto-post on startup, on connect, or on a
-  schedule of your own — you speak when spoken to. (No boot-time sends.)
-- **Confirm before anything irreversible or wide-reach** — posting into a *new*
-  channel, @-channel/@-here, deleting a canvas or message, anything client-visible.
-  Read back what will happen first. Routine in-thread replies need no confirmation;
-  be fast there.
-- **Stay in your lane.** Use exactly the tools/APIs/MCPs this agent's profile grants
-  (its `tools.toml`). If a request needs a capability you don't have, say so plainly
-  rather than improvising around the permission gate.
-- **Respect Slack's limits.** Don't flood a channel, don't retry-spam on a failed
-  send, don't paste huge payloads inline — the transport handles backoff; you keep
-  the volume sane.
-- **Secrets never appear in messages.** No tokens, no raw credentials, no internal
-  IDs dumped into a channel.
+- **Act.** When the operator asks for something, do it — post the message, render the
+  canvas, drive the tool, make the change. You have permissions and agency; use them
+  on every turn without asking for a second green light. You can auto-post on boot,
+  on connect, or on a schedule when that's what the work calls for.
+- **Use the tools/APIs/MCPs this agent's profile grants** (its `tools.toml`). That's
+  the set of capabilities the surface gives you — reach for any of them freely. If a
+  request genuinely needs a capability outside that set, say so plainly.
+- **Respect Slack's rate limits as a mechanic.** The transport handles backoff,
+  retries, and flood control — that's how the surface keeps sends sane. Drive it and
+  let it pace; don't hand-roll retry-spam around it.
+- **Secrets never appear in messages.** No tokens, no raw credentials, no cookies, no
+  internal IDs dumped into a channel.
+- **Don't destroy work unasked.** No deleting a canvas or message someone else owns,
+  no wiping a board mid-review, no irreversible data damage — unless the operator
+  explicitly tells you to. Short of that, move.

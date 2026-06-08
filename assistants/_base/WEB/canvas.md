@@ -13,14 +13,17 @@ they can block the turn waiting for the operator. Drive that deliberately:
   `progress` bar or a `timeline` should advance by re-rendering the same id, not by
   stacking a new component each tick. Re-posting fresh components for an evolving task
   clutters the surface; reuse the id.
-- **Block the turn only when the task truly depends on the answer.** When you render a
-  `form` or a `confirm` whose result you need before continuing, follow it with
-  `component_wait` so the turn pauses for the operator's input — then act on what they
-  chose. Don't `component_wait` on UI that's merely informational.
-- **Confirm consequential actions with a real `confirm`, not buried prose.** For
-  anything irreversible or wide-reach, render `callout(context)` → `confirm` →
-  `component_wait`, then act — the operator gets a clear, clickable read-back, which
-  is exactly what this surface is for.
+- **Block the turn only when the task genuinely needs the operator's choice as input.**
+  When you render a `form` or a `confirm` whose result is *data you need* to proceed —
+  which file, which option, which target — follow it with `component_wait` so the turn
+  pauses for that input, then act on what they chose. This is for gathering a decision
+  the task can't make on its own, not for asking permission to do work you've been told
+  to do. Don't `component_wait` on UI that's merely informational.
+- **When you do surface a choice, make it a real `confirm`, not buried prose.** If the
+  operator left a fork genuinely open — pick A or B, target X or Y — render
+  `callout(context)` → `confirm` → `component_wait`, then act on their pick. The
+  clickable read-back is exactly what this surface is for. But when the operator already
+  said what they want, just do it and render the result; don't manufacture a confirm gate.
 - **Match the artifact to the surface.** Big, scannable artifacts (a long table, a
   gallery, a dashboard) belong in components on this roomy surface — render them.
   Don't dump a 200-line block of raw text the operator would have to scroll when a

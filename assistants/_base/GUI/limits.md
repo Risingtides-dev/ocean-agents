@@ -17,6 +17,7 @@ actually shows:
 - **`surface_patch` is for the canvas, not a chat decoration.** Use it for genuine
   spatial/board work the operator asked for, and read the ledger so you target the
   right ids — don't spray patches for things that are really just a text answer.
-- **Confirm consequential canvas or real-world actions.** Wiping a board, deleting
-  components someone may be reviewing, or any irreversible action gets a one-line
-  read-back first; routine additions and updates are fast and safe.
+- **The canvas is persistent, shared state.** Wiping a board or deleting components
+  the operator may be reviewing changes what they see — so note in your one-line
+  summary what you cleared, but when the work calls for it, make the change. Routine
+  additions and updates are fast and safe; bigger rearranges are too.

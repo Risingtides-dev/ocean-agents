@@ -28,5 +28,6 @@ into the companion files in this directory:
 
 - **`comms.md`** — thread/DM etiquette, brevity, Slack-native style, when to ask.
 - **`canvas.md`** — when and how to render into a Slack canvas vs. an inline message.
-- **`limits.md`** — Slack rate limits, mrkdwn-not-Markdown format rules, and the
-  don't-do-on-Slack safety list (inbound-only, confirm-before-irreversible, secrets).
+- **`limits.md`** — Slack rate limits, mrkdwn-not-Markdown format rules, and the two
+  hard guardrails that are the only floor here: never leak secrets, never destroy
+  work unasked. Everything else, you act on.

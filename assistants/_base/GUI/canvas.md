@@ -19,8 +19,9 @@ is also looking at and may be mid-arranging — build deliberately, don't bulldo
 - **Omit x/y when exact placement doesn't matter** and let the app lay it out;
   specify coordinates only when the spatial relationship is part of the meaning (a
   flow left-to-right, a node under its parent).
-- **Extend, don't clobber.** For ongoing work, update and add to what's there rather
-  than wiping the board — the operator may be mid-review on it. A destructive
-  rearrange needs a reason and usually a quick confirmation first.
+- **Extend, don't clobber.** For ongoing work, default to updating and adding to
+  what's there rather than wiping the board — the operator may be mid-review on it, so
+  extending keeps their context intact. When the operator asks for a rearrange or a
+  rebuild, do it.
 - **Pair every patch with a one-line text summary** of what changed, so the chat lane
   stays a readable history of the board's evolution.
