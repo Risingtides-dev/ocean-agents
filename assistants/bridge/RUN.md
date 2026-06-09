@@ -13,6 +13,10 @@ Slack event → dedupe → resolve_context → build_turn
 `reply` goes out over the existing pure-stdlib transport; only the inbound socket
 needs `slack_sdk`.
 
+> **How it works** (the flow, `OCEAN_ASSISTANTS_DIR`, and `reply.py`) is documented
+> in [`README.md`](README.md). This file is the **operational** guide — how to set
+> up the Slack app and start the listener.
+
 ---
 
 ## 1. Slack app setup (one app per agent identity — spec §5)
