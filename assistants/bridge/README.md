@@ -60,6 +60,65 @@ in-thread instead of going silent. The loop never crashes on one message.
 
 ---
 
+## The OTHER consumption path: `slack_canvas` ops over SSE (`canvas_consumer.py`)
+
+The inbound flow above is **request/reply**: the bridge POSTs `/v1/prompt` and
+reads the assistant text out of the response body. That covers chat. It does
+**not** cover the agent's `slack_canvas` tool (ocean-os runtime, OCEAN-214),
+whose canvas ops (`create`/`read`/`update`/`append`/`list`) are emitted as
+**async side-effects** onto the daemon's `/v1/agent/events` **SSE** stream
+(`AgentTurnEvent::SlackCanvas`), not returned in a `/v1/prompt` body. A POST
+reply can't see them — they need a *subscriber*.
+
+`canvas_consumer.py` is that subscriber (OCEAN-244). It is the bridge's first SSE
+consumer and runs as its **own process**, parallel to `socket_listener.py`:
+
+```
+Ocean daemon  /v1/agent/events  (SSE, ?all=1)
+   │  AgentTurnEvent::SlackCanvas { session_id, op }
+   ▼
+canvas_consumer.py  (run())                          ── THIS repo, SSE subscriber
+   │  parse_canvas_event → apply_op → deliver_fulfillment
+   ▼
+couriers/transport/slack.py                          ── real Slack Canvas API
+   │  create → canvases.create            (mints canvas_id)
+   │  update/append → canvases.edit       (replace / insert_at_end / insert_at_start)
+   │  read  → files.info + canvases.sections.lookup   (structure, see caveat)
+   │  list  → files.list types=spaces                 (channel's canvas files)
+   ▼
+POST /v1/agent/canvas/fulfill  { session_id, op, result }   ── fulfillment return
+   (resolves the agent's pending_bridge read/list to real content)
+```
+
+The op→API mapping and result-building are pure (token-free) and unit-tested with
+a mocked transport (`tests/test_canvas_consumer.py`); only `run()` opens the live
+SSE connection. Run it with `python3 assistants/bridge/canvas_consumer.py run`
+(needs a running daemon + the same `xoxb-` bot token the transport resolves), or
+`… describe` for a no-I/O JSON self-description of the contract.
+
+**Two honest cross-repo caveats** (verified against ocean-os `main`, 2026-06):
+
+1. **The daemon doesn't yet relay `slack_canvas` on the SSE wire.** The OCEAN-214
+   runtime emits the op onto its internal bus, but the daemon's event bridge
+   drops it on a `_ => {}` catch-all — there is no `AgentTurnEvent::SlackCanvas`
+   variant on `main` (the #165 PR that adds it is not merged to `main`). Until
+   that lands, `canvas_consumer.run()` connects and waits but receives no canvas
+   events. The consumer is built to the documented contract and is correct the
+   moment ocean-os lands its half.
+2. **No fulfillment-return endpoint is mounted on the daemon.**
+   `deliver_fulfillment()` POSTs to the documented seam and **fail-softs on 404**
+   (logs, never crashes), so the code is inert-but-ready. The Slack-side effect
+   of mutating ops (create/update/append) is already live regardless; only the
+   read/list *awareness* round-trip depends on this route.
+
+**Slack read caveat (not a bug, an API limit):** Slack exposes **no** endpoint
+that returns a canvas's raw markdown body. `read_canvas` returns what the public
+API *does* give — the section skeleton (`canvases.sections.lookup`) + file
+metadata (`files.info`) — plus an explicit note, rather than fabricating a body.
+`create`/`update`/`append` are fully round-trippable.
+
+---
+
 ## `OCEAN_ASSISTANTS_DIR` — which profile the daemon loads
 
 This is the single most important env var on the Slack path, and the easiest to
