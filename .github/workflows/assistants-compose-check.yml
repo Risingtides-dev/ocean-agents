@@ -1,14 +1,5 @@
 name: assistants-compose-check
 
-# ACTIVATION: move this file to .github/workflows/assistants-compose-check.yml to
-# enable it as a GitHub Actions workflow:
-#   git mv assistants/tools/ci/assistants-compose-check.yml \
-#          .github/workflows/assistants-compose-check.yml
-# It ships here (not under .github/workflows/) because creating workflow files
-# requires a GitHub token with the `workflow` OAuth scope, which the authoring
-# session did not have. The local gates (pre-commit hook + `make assistants-check`)
-# enforce the same drift check today; this is the CI counterpart, one `git mv` away.
-#
 # Drift gate for the base-profile composition (OCEAN-89, on top of OCEAN-80).
 #
 # The Ocean daemon loads ONE published file per surface — assistants/<SURFACE>/system.md.
