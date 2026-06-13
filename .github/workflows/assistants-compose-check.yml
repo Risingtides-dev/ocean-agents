@@ -55,3 +55,40 @@ jobs:
             fi
           done
           exit $fail
+
+  test-runner:
+    # Runs the Python unittest suite + a full py_compile syntax sweep.
+    # Pairs with the compose-check job above to give ocean-agents a real PR test gate.
+    #
+    # The suite (assistants/bridge/tests/test_socket_pipeline.py) is pure stdlib +
+    # unittest — no pytest, no slack_sdk, no network. It exercises the Socket Mode
+    # bridge pipeline end-to-end with a mocked Slack client and a mocked daemon.
+    # 19 tests, verified green on clean main before this workflow was authored (OCEAN-328).
+    #
+    # Import path: the test file injects BRIDGE_DIR into sys.path itself, so
+    # `python3 -m unittest assistants.bridge.tests.test_socket_pipeline` works from
+    # repo root via Python 3.3+ namespace-package discovery — no __init__.py needed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run unittest suite (assistants.bridge.tests.test_socket_pipeline)
+        run: python3 -m unittest assistants.bridge.tests.test_socket_pipeline -v
+
+      - name: py_compile sweep — all Python sources under assistants/
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r -d '' f; do
+            if ! python3 -m py_compile "$f"; then
+              echo "SYNTAX ERROR: $f"
+              fail=1
+            fi
+          done < <(find assistants -name "*.py" -print0)
+          echo "py_compile sweep done (exit $fail)"
+          exit $fail
