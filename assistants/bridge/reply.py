@@ -63,8 +63,13 @@ def deliver(reply_target: dict, output: dict, token: str | None = None) -> dict:
 
     if should_canvas(output):
         # Rich content → canvas + a one-line in-thread pointer (house canvas SOP).
-        canvas = output.get("canvas") or {"title": "content-agent", "markdown": output.get("text", "")}
-        res = client.create_canvas(title=canvas["title"], markdown=canvas["markdown"], channel=channel)
+        # Read fields defensively: a PARTIAL canvas dict (e.g. {"markdown": ...}
+        # with no title) is truthy, so it skips the `or` default — `canvas["title"]`
+        # would then KeyError and the reply silently never lands.
+        canvas = output.get("canvas") or {}
+        title = canvas.get("title", "content-agent")
+        markdown = canvas.get("markdown", output.get("text", ""))
+        res = client.create_canvas(title=title, markdown=markdown, channel=channel)
         client.post_message(channel, text=output.get("pointer", "Posted a canvas 👆"), thread_ts=thread_ts)
         return {"ok": True, "mode": "canvas", "result": res}
 
