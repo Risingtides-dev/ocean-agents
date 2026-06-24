@@ -26,22 +26,19 @@ contract is unit-testable with a mocked Slack transport + synthetic events
 (tests/test_canvas_consumer.py). Only `run()` opens the live SSE connection and
 needs a running daemon + a real Slack token.
 
-Cross-repo honesty (verified against ocean-os `main`, 2026-06)
---------------------------------------------------------------
-The #165 PR *body* describes the ocean-os half — an `AgentTurnEvent::SlackCanvas`
-variant relayed over SSE, plus a typed `fulfilled_read`/`fulfilled_list`
-fulfillment path. As of this writing **that commit is not on ocean-os `main`**
-(`git show main:` finds no `SlackCanvas` variant and the daemon relay still drops
-`AgentEvent::SlackCanvas` on its `_ => {}` arm; no fulfillment route is mounted).
-So this consumer is built to the documented contract and is correct the moment
-ocean-os lands its half — but two things are not yet live end-to-end:
+Cross-repo status (verified against ocean-os `main`, 2026-06)
+-------------------------------------------------------------
+Both halves of the seam are now LIVE on ocean-os `main`:
 
-  1. The daemon does not yet EMIT `slack_canvas` on the SSE wire (no relay arm).
-  2. The daemon exposes no fulfillment-return ENDPOINT. `deliver_fulfillment()`
-     posts to the documented seam and fail-softs (logs, never crashes) when the
-     route 404s, so this code is inert-but-ready rather than wrong.
+  1. The daemon EMITS `slack_canvas` on the SSE wire — it has a dedicated
+     `AgentTurnEvent::SlackCanvas` relay arm, so canvas ops reach this consumer.
+  2. The daemon mounts the fulfillment-return ENDPOINT at `/v1/agent/canvas/fulfill`,
+     so `deliver_fulfillment()` posts the bridged read/list result back and the
+     agent's `pending_bridge` placeholder resolves to real content.
 
-Both are called out at their seams below. See the task report / PR for detail.
+`deliver_fulfillment()` still fail-softs (logs, never crashes) on a 404 or an
+unreachable daemon, so the consumer degrades gracefully if the daemon is down or
+running an older build.
 
 Usage:
   canvas_consumer.py describe                 # JSON self-description (no I/O)
@@ -66,9 +63,9 @@ DAEMON_URL = os.environ.get("OCEAN_DAEMON_URL", "http://127.0.0.1:4780")
 SLACK_CANVAS_EVENT_TYPE = "slack_canvas"
 
 # Where we POST a fulfilled read/list result back so the agent's pending op
-# resolves to real content. This route is the documented #165 fulfillment seam;
-# it is not yet mounted on the daemon (see module docstring) — deliver_fulfillment
-# fail-softs on 404. Override via env when ocean-os finalizes the path.
+# resolves to real content. This route is mounted on the daemon (ocean-os main);
+# deliver_fulfillment still fail-softs on 404 for older daemon builds. Override
+# via env if the path ever changes.
 FULFILLMENT_PATH = os.environ.get("OCEAN_CANVAS_FULFILL_PATH", "/v1/agent/canvas/fulfill")
 
 # Reply path reuse: couriers/transport/slack.py owns all Slack auth/retry/I/O.
@@ -227,11 +224,11 @@ def deliver_fulfillment(session_id, op: dict, result: dict,
 
     The agent's `read`/`list` op is left as a `pending_bridge` placeholder until
     a fulfilled result is delivered. This posts `{session_id, op, result}` to the
-    documented #165 return route so the placeholder resolves to real content.
+    daemon's `/v1/agent/canvas/fulfill` route so the placeholder resolves to real
+    content. That route is mounted on ocean-os `main`.
 
-    HONEST CAVEAT: that route is not yet mounted on ocean-os `main` (module
-    docstring). On 404/connection error we LOG and return a structured note —
-    we never raise — so this is inert-but-correct until the daemon half lands.
+    On 404/connection error we LOG and return a structured note — we never raise —
+    so the consumer degrades gracefully against a down or older daemon build.
     The mutating ops (create/update/append) don't strictly need a return (their
     effect is already live in Slack), but we still post so the daemon can mint the
     real `canvas_id` back to the agent for `create`.
@@ -252,12 +249,13 @@ def deliver_fulfillment(session_id, op: dict, result: dict,
             body = r.read().decode()
         return {"ok": True, "status": r.status, "body": body[:500]}
     except urllib.error.HTTPError as e:
-        # 404 = the daemon hasn't mounted the fulfillment route yet (expected
-        # until ocean-os lands #165). Other 4xx/5xx = a real delivery problem.
+        # 404 = the daemon doesn't expose the fulfillment route (e.g. an older
+        # build; it is mounted on current ocean-os main). Other 4xx/5xx = a real
+        # delivery problem.
         if e.code == 404:
             log.info(
-                "fulfillment route %s not mounted on daemon (404) — ocean-os half "
-                "of OCEAN-244 not landed yet; result computed but not returned. "
+                "fulfillment route %s returned 404 — daemon build predates the "
+                "mounted route; result computed but not returned. "
                 "op=%s ok=%s", url, op.get("op"), result.get("ok"),
             )
             return {"ok": False, "status": 404, "kind": "route_absent"}
@@ -341,9 +339,8 @@ def run(daemon_url: str | None = None):
     reconnects with backoff on drop, and fail-softs per event. Requires a running
     daemon and a Slack bot token (resolved by the transport).
 
-    NOTE: until ocean-os relays `slack_canvas` on the SSE wire (module docstring),
-    this connects and waits but will see no canvas events — it is correct and
-    ready, not yet exercised end-to-end.
+    NOTE: ocean-os `main` relays `slack_canvas` on the SSE wire, so a running
+    daemon delivers canvas events to this subscription end-to-end.
     """
     logging.basicConfig(
         level=os.environ.get("OCEAN_LOG_LEVEL", "INFO"),
@@ -402,9 +399,9 @@ def cmd_describe(_args):
             "list": "Slack.list_canvases → files.list types=spaces (canvas filetype)",
         },
         "fulfillment": f"POST {DAEMON_URL}{FULFILLMENT_PATH} {{session_id, op, result}}",
-        "cross_repo_caveats": [
-            "ocean-os main has no AgentTurnEvent::SlackCanvas SSE relay yet (no events arrive)",
-            "ocean-os main mounts no fulfillment route (deliver_fulfillment fail-softs on 404)",
+        "cross_repo_notes": [
+            "ocean-os main relays AgentTurnEvent::SlackCanvas over SSE (events arrive)",
+            "ocean-os main mounts the /v1/agent/canvas/fulfill route (deliver_fulfillment posts back; fail-softs on 404 for older builds)",
             "Slack API has no raw-markdown canvas read; read returns section structure + note",
         ],
     }, indent=2))
