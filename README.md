@@ -26,7 +26,7 @@ ocean-agents/
 │   ├── README.md             # the class + the shared route concept
 │   ├── transport/            # THE route — shared, stdlib, no per-agent dup
 │   │   ├── slack.py          # active route
-│   │   └── parked/           # prior routes (telegram.py)
+│   │   └── parked/           # retired routes (archived, off active path)
 │   └── file-courier/         # a species
 │       ├── CLAUDE.md         # operating protocol (provider-neutral)
 │       ├── AGENTS.md         # short agent instructions
