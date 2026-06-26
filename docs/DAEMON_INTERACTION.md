@@ -39,18 +39,18 @@ The map is owned by Ocean OS in `ocean-agent::surface_dir` (which mirrors
 `surface_flag` — same labels, one source of truth). Each `client_type` resolves
 to the directory name the daemon looks up under the assistants root:
 
-| `client_type`                     | Surface flag / dir | Profile path                  |
-| --------------------------------- | ------------------ | ----------------------------- |
-| `surface-extension`               | `BRWSR`            | `assistants/BRWSR/system.md`  |
-| `tui`                             | `TUI`              | `assistants/TUI/system.md`    |
-| `surface-web`                     | `WEB`              | `assistants/WEB/system.md`    |
-| `surface-gpui` / `surface-native` | `GUI`              | `assistants/GUI/system.md`    |
-| `cli`                             | `CLI`              | `assistants/CLI/system.md`    |
-| `leo-voice`                       | `VOX`              | `assistants/VOX/system.md`    |
-| `acp-zed`                         | `ACP`              | `assistants/ACP/system.md`    |
-| `surface-slack`                   | `SLACK`            | `assistants/SLACK/system.md`  |
-| `surface-canvas`                  | `CNVS`             | `assistants/CNVS/system.md`   |
-| `surface-mobile`                  | `MOBL`             | `assistants/MOBL/system.md`   |
+| `client_type`                     | Surface flag / dir | Profile path                   |
+|-----------------------------------|--------------------|--------------------------------|
+| `surface-extension`               | `BRWSR`            | `assistants/BRWSR/system.md`   |
+| `tui`                             | `TUI`              | `assistants/TUI/system.md`     |
+| `surface-web`                     | `WEB`              | `assistants/WEB/system.md`     |
+| `surface-gpui` / `surface-native` | `GUI`              | `assistants/GUI/system.md`     |
+| `cli`                             | `CLI`              | `assistants/CLI/system.md`     |
+| `leo-voice`                       | `VOX`              | `assistants/VOX/system.md`     |
+| `acp-zed`                         | `ACP`              | `assistants/ACP/system.md`     |
+| `surface-slack`                   | `SLACK`            | `assistants/SLACK/system.md`   |
+| `surface-canvas`                  | `CNVS`             | `assistants/CNVS/system.md`    |
+| `surface-mobile`                  | `MOBL`             | `assistants/MOBL/system.md`    |
 | *(anything else)*                 | `?`                | *(no lookup; seed const used)* |
 
 An unknown `client_type` resolves to `"?"`, for which the daemon skips the file
@@ -94,17 +94,17 @@ The canonical product-agent entry point. First-party surfaces create or choose a
 session first, then post turns scoped to that `session_id`. Body
 (`AgentTurnRequest`):
 
-| Field            | Type        | Notes                                                              |
-| ---------------- | ----------- | ------------------------------------------------------------------ |
-| `prompt`         | `string`    | The turn prompt.                                                   |
-| `cwd`            | `string`    | Working directory for the turn.                                    |
-| `session_id`     | `string?`   | The session this turn belongs to. Omitted ⇒ the daemon mints one. |
-| `project_id`     | `string?`   | When set, the daemon binds the turn to the project's `workspace_root`. |
-| `client_type`    | `string?`   | The originating surface — drives the surface flag and profile lookup in §1. |
-| `guidance`       | `string[]?` | Optional guidance hints (e.g. active-tab context).                |
-| `room_id`        | `string?`   | Optional Track-0 room-scoped turn id.                             |
-| `thinking_level` | `string?`   | Per-turn reasoning-effort override.                              |
-| `model_id`       | `string?`   | Per-session / per-turn model override.                           |
+| Field            | Type       | Notes                                                               |
+|------------------|------------|---------------------------------------------------------------------|
+| `prompt`         | `string`   | The turn prompt.                                                    |
+| `cwd`            | `string`   | Working directory for the turn.                                     |
+| `session_id`     | `string?`  | The session this turn belongs to. Omitted ⇒ the daemon mints one.   |
+| `project_id`     | `string?`  | When set, the daemon binds the turn to the project's `workspace_root`. |
+| `client_type`    | `string?`  | The originating surface — drives the surface flag and profile lookup in §1. |
+| `guidance`       | `string[]?`| Optional guidance hints (e.g. active-tab context).                  |
+| `room_id`        | `string?`  | Optional Track-0 room-scoped turn id.                               |
+| `thinking_level` | `string?`  | Per-turn reasoning-effort override.                                 |
+| `model_id`       | `string?`  | Per-session / per-turn model override.                              |
 
 The POST returns metadata only (`turn_id`, `session_id`, `status`); the reply
 text, tool calls, and ids arrive over the SSE stream (§3).

@@ -28,7 +28,7 @@ doc exists to name what's there, name what's missing, and sequence the build.
 
 ## 1. The ontology (the spine)
 
-```
+```text
 [model, tools, skills, context, memory]  ──compose──▶  AGENT
                                                           │
                                   ┌───────────────────────┴───────────────────────┐
@@ -60,7 +60,7 @@ doc exists to name what's there, name what's missing, and sequence the build.
 ## 2. The quad — where each piece lives
 
 | Repo | Role | Language | Owns |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **ocean-os** | Runtime + daemon (`:4780`) + **typed engine** | Rust | model, tools, local context, the agent loop, **the workflow executor**, **the memory engine**, the low-level parse core |
 | **ocean-bedrock** | Shared knowledge layer — git-backed files + ledger | Node (>=22) | Shared-tier memory (`/docs /context /handoffs /sessions`), semantic search, graph, **workflow specs as data** |
 | **ocean-agents** | Agent *instances* (this repo) | TOML + md + py | couriers (`file-courier`), assistants (`content-agent`, `bonzai`), surface profiles |
