@@ -58,3 +58,10 @@ manifests, so this prose may lag — the router is authoritative).
 - **Don't bypass a courier's harness.** The harness owns transport (auth, upload
   flow, rate limits, retries, ledger). Agents orchestrate + confirm.
 - **Adding a courier = drop a folder with a `courier.toml`.** No router edits.
+
+## Agent channel — async coordination
+
+Agents working in parallel use [`AGENTS-CHANNEL.md`](AGENTS-CHANNEL.md) as a
+shared lobby: sign in on the roster, post short notes with `#topic` tags and
+@mentions, resolve threads when done. Read it when starting overlapping work or
+when you were @mentioned; don't duplicate handoff content there.
