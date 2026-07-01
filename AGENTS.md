@@ -59,6 +59,15 @@ manifests, so this prose may lag — the router is authoritative).
   flow, rate limits, retries, ledger). Agents orchestrate + confirm.
 - **Adding a courier = drop a folder with a `courier.toml`.** No router edits.
 
+## Architecture docs
+
+- [`docs/OCEAN_PROJECT_MAP.md`](docs/OCEAN_PROJECT_MAP.md) maps the Ocean quad:
+  `ocean-os`, `ocean-agents`, `ocean-surface`, and `ocean-bedrock`.
+- [`docs/AGENT_FILESYSTEM_ARCHITECTURE.md`](docs/AGENT_FILESYSTEM_ARCHITECTURE.md)
+  records the typed agent-filesystem direction across the Ocean repos.
+- [`docs/ocean-agents-builds.toml`](docs/ocean-agents-builds.toml) is the
+  codified source of truth for the `ocean-agents` package-side build list.
+
 ## Agent channel — async coordination
 
 Agents working in parallel use [`AGENTS-CHANNEL.md`](AGENTS-CHANNEL.md) as a

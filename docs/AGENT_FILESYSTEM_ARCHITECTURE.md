@@ -347,6 +347,20 @@ traits lift that folder-convention into runtime contracts.
 
 ## 9. Build sequence
 
+There are two build tracks:
+
+- **Runtime foundation** in `ocean-os`: typed primitives, stores, dispatch, and
+  engines.
+- **Agent package work** in `ocean-agents`: the filesystem artifacts the runtime
+  consumes -- manifests, profiles, SOPs, tool grants, contracts, and fixtures.
+
+This repo should not grow a second runtime. Its end-state is the pure-content
+shape described in [`PYTHON_TO_RUST_MIGRATION.md`](./PYTHON_TO_RUST_MIGRATION.md):
+executable bridge/router/harness code moves to Rust only after each replacement is
+verified.
+
+### 9.1 Runtime foundation (`ocean-os`)
+
 1. **`ocean-memory`** (foundation — everything depends on it): `Memory` schema,
    `MemoryScope`/`MemoryAccess`/`MemoryKind`, `SqliteMemoryStore` (Agent+Operator
    scope, MVCC versions table), reuse `ocean-context` provenance/trust. Fixtures:
@@ -362,6 +376,42 @@ traits lift that folder-convention into runtime contracts.
 
 Each step is independently shippable and lands in `ocean-os` without disturbing a
 running assistant.
+
+### 9.2 Agent package build list (`ocean-agents`)
+
+The codified source of truth for the package-side build list is
+[`ocean-agents-builds.toml`](./ocean-agents-builds.toml). Update that register
+first; this table is the human-readable mirror.
+
+**Reality check:** `ocean-agents` currently has **zero primitive-native builds**.
+The useful things in this repo today are filesystem conventions, authored
+profiles/manifests/SOPs, and transitional Python harnesses. The real typed
+primitive implementation and enforcement happen in `ocean-os`.
+
+| Build | Status | Owns | Acceptance |
+|---|---|---|---|
+| **A1. Typed package manifests** | `FILESYSTEM_CONVENTION` | `couriers/*/courier.toml`, `assistants/*/*.toml` | Every assistant/courier declares `class`, `mode`, surfaces/routes, `cwd`, profile path, tool grants, and workflow-contract hooks in a schema the Rust runtime can parse without Python discovery. |
+| **A2. Surface profile catalog** | `FILESYSTEM_CONVENTION` | `assistants/_shared/`, `assistants/_base/<SURFACE>/`, generated `assistants/<SURFACE>/system.md` | Every authored surface has source files plus a non-empty generated profile; `make assistants-check` proves no drift. New surfaces are added as data, not daemon rebuilds. |
+| **A3. Named assistant packages** | `FILESYSTEM_CONVENTION` | `assistants/bonzai/`, `assistants/content-agent/` | `bonzai` remains a complete git-hygiene specialist; `content-agent` graduates from scaffold to live Slack assistant with generate/status/gallery/canvas flows grounded in its manifest, tools, and SOPs. |
+| **A4. Courier package catalog** | `FILESYSTEM_CONVENTION` | `couriers/<courier>/courier.toml`, courier protocol docs, route contracts | `file-courier` stays the reference; each new courier is a folder with a manifest, destination-confirmation rules, input/output contract, and no router edit. |
+| **A5. Slack bridge validation pack** | `TRANSITIONAL_HARNESS` | `assistants/bridge/`, `couriers/transport/slack.py` until `ocean-slack` lands | The current Python bridge remains the live parity harness: inbound mention/DM -> daemon turn -> in-thread reply, plus canvas-op fulfillment once the daemon emits the SSE event. It is retired only after the Rust path passes the same tests live. |
+| **A6. Tool/SOP/skill declarations** | `FILESYSTEM_CONVENTION` | `assistants/*/tools.toml`, `assistants/*/sops/`, future `skills/<name>/` | Tool grants and SOPs are explicit filesystem data. When the typed `Skill` schema lands, each reusable SOP becomes a declared skill with trigger semantics, inputs, and provenance. |
+| **A7. Memory mount declarations** | `PROPOSED` | future manifest stanzas, not local sqlite stores | Agent packages declare the memory scopes they expect (`Agent`, `Operator`, `Shared`) and the access mode (`Infer`/`Query`) they are allowed to request. Actual storage remains `ocean-memory`. |
+| **A8. Workflow contract fixtures** | `PROPOSED` | per-agent/per-courier JSON Schema fixtures or manifest stanzas | Workflow-invoked steps can call a courier or assistant through a typed `Contract` instead of a free prompt; fixtures are testable without a live workflow run. |
+| **A9. Verification gates** | `TRANSITIONAL_HARNESS` | `Makefile`, bridge tests, router list checks, future manifest linter | Existing checks stay green (`make assistants-check`, bridge unit tests). Add a manifest/schema linter before deleting Python discovery. |
+| **A10. Pure-content cutover** | `PROPOSED` | deletion gates tracked by `PYTHON_TO_RUST_MIGRATION.md` | After Rust replacements are live, remove Python bridge/router/harness code and leave this repo as manifests, profiles, skills, SOPs, and test fixtures only. |
+
+Dependency order from the package side:
+
+1. Lock A1 (manifest shape) enough that both couriers and assistants describe the
+   same five primitives.
+2. Keep A2 green while adding or changing surfaces; profile drift is a runtime
+   bug because the daemon loads the generated file.
+3. Finish A3/A4 as real packages before pushing them into workflow automation.
+4. Use A5 as the parity harness while Rust absorbs Slack I/O and dispatch.
+5. Layer A6/A7/A8 once the runtime has typed `Skill`, `Memory`, and `Contract`
+   readers.
+6. Do A10 last; no Python deletion before a verified Rust replacement.
 
 ---
 

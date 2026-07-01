@@ -12,6 +12,8 @@ behavior. This repo is intentionally **not** part of the `ocean-os` Rust
 workspace (that repo stays pure Rust crates/containers); these agents *run on top
 of* the Ocean runtime.
 
+Cross-repo routing and ownership map: [`docs/OCEAN_PROJECT_MAP.md`](docs/OCEAN_PROJECT_MAP.md).
+
 ## Contents
 
 | Group | What it is |
