@@ -56,11 +56,10 @@ python3 assistants/tools/compose_profile.py --check
 Edit the sources (`_shared/system.md`, `_base/<SURFACE>/*.md`) and re-run with
 `--write`, then commit both. `--check` (no surface) checks all surfaces, fails on
 drift, and also fails any published file that is empty or missing — the daemon loads
-that file at turn time, so it must never go blank. The gate runs as a pre-commit hook
-(`.pre-commit-config.yaml`) and via `make assistants-check` (both active). The CI
-counterpart ships at `assistants/tools/ci/assistants-compose-check.yml`; `git mv` it
-into `.github/workflows/` to enable it (staged outside `.github/workflows/` because
-creating workflow files needs a token with the `workflow` OAuth scope).
+that file at turn time, so it must never go blank. The gate runs three ways, all
+active: as a pre-commit hook (`.pre-commit-config.yaml`), via `make assistants-check`,
+and in CI — `.github/workflows/assistants-compose-check.yml` runs the same `--check`
+on every push/PR (activated in OCEAN-327).
 
 > **When ocean-os ships runtime composition** (the parked symlink-vs-resolver), the
 > daemon will compose `_shared` + `_base/<SURFACE>` + `<agent>/<SURFACE>` itself and

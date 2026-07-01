@@ -121,12 +121,11 @@ Then the drift gate keeps source and output in lockstep:
 
 - `python3 assistants/tools/compose_profile.py --check` — verifies **every** surface's
   published file matches its sources and is non-empty (exits non-zero on drift).
-  `--check <SURFACE>` checks one. Wired as `make assistants-check` and a pre-commit
-  hook (`.pre-commit-config.yaml`) — both active today. A CI counterpart ships at
-  `assistants/tools/ci/assistants-compose-check.yml`; `git mv` it to
-  `.github/workflows/` to enable it (it's staged outside `.github/workflows/` because
-  creating workflow files needs a token with the `workflow` OAuth scope). A
-  hand-edited published file is caught by any of these and fails the gate.
+  `--check <SURFACE>` checks one. Wired three ways, all active today:
+  `make assistants-check`, a pre-commit hook (`.pre-commit-config.yaml`), and CI —
+  `.github/workflows/assistants-compose-check.yml` runs the same gate on every
+  push/PR (activated in OCEAN-327). A hand-edited published file is caught by any
+  of these and fails the gate.
 
 > **Why the published file must never go empty or stale:** the Ocean daemon loads
 > exactly `assistants/<SURFACE>/system.md` at turn time. An absent, empty, or stale
@@ -139,7 +138,7 @@ Then the drift gate keeps source and output in lockstep:
 |---|---|---|---|
 | `[BONZAI]` | **bonzai** | git hygiene / worktree — prune branch sprawl safely; HTML triage board; enforce merge→main→delete | live (R3) |
 | `[SLACK]` | **SLACK** house profile | Slack-native comms (threads/DMs, mrkdwn not full Markdown, emoji-aware), canvas-rendering SOPs, inbound-only safety — the base every Slack assistant loads. Now sourced DRY from `_base/SLACK/{system,comms,canvas,limits}.md` via the composer; `SLACK/system.md` is the composed artifact | live (R5) |
-| `[SLACK]` | **content-agent** | conversational content-pipeline assistant: generate video, chat/Q&A, gallery/status, canvas rendering — calls the content-posting-lab API; identity + `SLACK/` overrides + `tools.toml` + pipeline SOPs + inbound `bridge/` (Socket Mode) scaffolded, live Slack wiring deferred | scaffold (R5, OCEAN-80) |
+| `[SLACK]` | **content-agent** | conversational content-pipeline assistant: generate video, chat/Q&A, gallery/status, canvas rendering — calls the content-posting-lab API; identity + `SLACK/` overrides + `tools.toml` + pipeline SOPs + inbound `bridge/` — Socket Mode listener → daemon → threaded reply, plus the canvas consumer — all wired and live | live (Slack bridge; OCEAN-112/244/375) |
 | `[CNVS]` | **CNVS** house profile | tldraw / spatial canvas — visual, durable artifacts; additive layout; confirm destructive board ops. Sourced DRY from `_base/CNVS/{system,canvas,vibe}.md`; `CNVS/system.md` is the composed artifact | live (R4 seed, OCEAN-89) |
 | `[MOBL]` | **MOBL** house profile | mobile / on-the-move — glanceable, voice-friendly, answer-first; defer bulky artifacts to richer surfaces. Sourced DRY from `_base/MOBL/{system,comms,vibe}.md`; `MOBL/system.md` is the composed artifact | live (R4 seed, OCEAN-89) |
 | `[VOX]` | **VOX** house profile | voice / hands-free (`leo-voice`) — spoken-clean output (no markdown/paths/code), answer-first, barge-in-aware brevity; defer bulky output to richer surfaces. Sourced DRY from `_base/VOX/{system,comms,safety,vibe}.md`; `VOX/system.md` is the composed artifact | live (R4, OCEAN-89) |
