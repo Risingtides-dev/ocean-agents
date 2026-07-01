@@ -80,3 +80,25 @@ wip/bonzai-content-local — the latter is the companion piece to the kept
 stash). Full triage record at
 `../ocean-discovery/08-branch-triage-ocean-agents.md`. `make assistants-check`
 passes clean.
+
+time: [07:31pm] [07-01-26]
+agent: [claude] [fable 5]
+worktree: [main]
+type: [merge]: Phase-1 agents-docs-truth
+area: [docs]: Spec recovery + README truth-sync
+
+Landed the missing design authority: merged design/content-agent-slack-assistant
+(docs-only, one commit) via --no-ff, so
+docs/specs/2026-06-04-content-agent-slack-assistant-design.md now exists on main
+and the assistants/README.md link plus every §3–§13 bridge citation finally
+resolve — the spec had sat unmerged since 06-04 while everything built against
+it shipped. Then truth-synced the two READMEs that were lying about repo state:
+assistants/README.md and assistants/tools/README.md both still told operators
+the compose-check CI workflow was parked at assistants/tools/ci/ awaiting a git
+mv, but it has been live at .github/workflows/assistants-compose-check.yml since
+OCEAN-327 (6b4c362); and the registry table still labeled content-agent
+"scaffold (R5, OCEAN-80)" though the Slack bridge shipped end to end
+(socket_listener OCEAN-112, reply, canvas_consumer OCEAN-244/375) — now "live
+(Slack bridge; OCEAN-112/244/375)". Branch design/content-agent-slack-assistant
+is fully merged and safe to delete. `make assistants-check` green; pushed to
+origin/main.
