@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Branch Triage — 63 abandoned branches</title>
+<title>Branch Triage</title>
 <style>
   :root{
     --bg:#0b0e14; --panel:#141925; --panel2:#1b2231; --line:#252e40;
@@ -73,18 +73,18 @@
 <body>
 <header>
   <h1>Branch Triage</h1>
-  <div class="sub">63 branches with unmerged commits across 5 repos · the 142 already-shipped ones were deleted · decide each: <b style="color:var(--restore)">restore</b> · <b style="color:var(--delete)">delete</b> · <b style="color:var(--cherry)">cherry-pick</b></div>
+  <div class="sub">Review each branch with unmerged commits: <b style="color:var(--restore)">restore</b> · <b style="color:var(--delete)">delete</b> · <b style="color:var(--cherry)">cherry-pick</b></div>
   <div class="filters">
     <span class="chip on" data-f="all">All</span>
     <span class="chip" data-f="gold">★ Real work</span>
     <span class="chip" data-f="fix">Small fixes</span>
-    <span class="chip" data-f="noise">Noise / dup</span>
+    <span class="chip" data-f="noise">Empty changes</span>
     <span class="chip" data-f="undecided">Undecided</span>
     <div class="tally">
       <span>restore <b class="r" id="t-r">0</b></span>
       <span>cherry <b class="c" id="t-c">0</b></span>
       <span>delete <b class="d" id="t-d">0</b></span>
-      <span>left <b class="u" id="t-u">63</b></span>
+      <span>left <b class="u" id="t-u">0</b></span>
     </div>
   </div>
 </header>
@@ -94,7 +94,7 @@
     <button id="q-noise">⌫ Delete all noise</button>
     <button id="q-gold">★ Restore all real work</button>
   </div>
-  <div class="hint" id="hint">Pick an action on each card. When done, export and paste back to Claude.</div>
+  <div class="hint" id="hint">Pick an action on each card. When done, export and return the decisions to your agent.</div>
   <button class="ghost" id="export">Copy decisions</button>
   <button id="exportdl">Download JSON</button>
 </footer>
@@ -104,14 +104,7 @@ const DATA = __DATA__;
 
 // classify each branch
 function classify(b){
-  const s = b.subjects.join(' ');
-  if(b.files===0 || /GitButler Workspace Commit/.test(b.subjects[0]) && b.commits===1 && b.files===0) return {tier:'noise',tag:'EMPTY'};
-  if(/GitButler Workspace Commit/.test(s) && b.files===0) return {tier:'noise',tag:'EMPTY'};
-  if(/verify auto-deploy trigger/.test(s) && b.adds===827) return {tier:'noise',tag:'DUP PRD'};
-  if(/^docs: add Telegram sound distribution PRD$/.test(b.subjects[0]) && b.commits===1) return {tier:'noise',tag:'DUP PRD'};
-  if(/^standup:/.test(b.subjects[0])) return {tier:'noise',tag:'STANDUP'};
-  if(/gitignore \.claude/.test(s)) return {tier:'noise',tag:'GITIGNORE'};
-  if(/Resolve [0-9a-f]{8}-/.test(b.subjects[0])) return {tier:'noise',tag:'TEST'};
+  if(b.files===0) return {tier:'noise',tag:'EMPTY'};
   if(b.commits>=4 || b.adds>=800) return {tier:'gold',tag:'REAL WORK'};
   return {tier:'fix',tag:'FIX'};
 }
@@ -152,7 +145,7 @@ function card(b){
   d.dataset.id=b._id;
   const subs=b.subjects.slice(0,4).map(s=>`<li>${esc(s)}</li>`).join('')
     + (b.commits>4?`<li class="more">+${b.commits-4} more commit${b.commits-4>1?'s':''}</li>`:'');
-  const badge = b._c.tier==='gold'?'b-gold':b._c.tier==='fix'?'b-fix':(b._c.tag.includes('DUP')?'b-dup':'b-noise');
+  const badge = b._c.tier==='gold'?'b-gold':b._c.tier==='fix'?'b-fix':'b-noise';
   d.innerHTML=`
     <div class="bmeta">
       <div class="bname">${esc(b.branch)}</div>
@@ -178,7 +171,7 @@ function card(b){
 function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
 function updateTally(){
   let r=0,c=0,dl=0; Object.values(decisions).forEach(v=>{if(v==='restore')r++;else if(v==='cherry')c++;else if(v==='delete')dl++;});
-  t_r.textContent=r;t_c.textContent=c;t_d.textContent=dl;t_u.textContent=63-r-c-dl;
+  t_r.textContent=r;t_c.textContent=c;t_d.textContent=dl;t_u.textContent=DATA.length-r-c-dl;
 }
 let curFilter='all';
 document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{
@@ -200,7 +193,7 @@ document.getElementById('export').onclick=()=>{
     txt+=`## ${k.toUpperCase()} (${o[k].length})\n`+(o[k].map(x=>'  '+x).join('\n')||'  (none)')+'\n\n';
   });
   const ta=document.getElementById('out');ta.value=txt;ta.select();document.execCommand('copy');
-  document.getElementById('hint').textContent='✓ Copied to clipboard — paste back to Claude.';
+  document.getElementById('hint').textContent='✓ Copied to clipboard — return the decisions to your agent.';
 };
 document.getElementById('exportdl').onclick=()=>{
   const blob=new Blob([JSON.stringify(buildExport(),null,2)],{type:'application/json'});

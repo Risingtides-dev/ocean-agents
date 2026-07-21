@@ -22,3 +22,16 @@ Published the clean public package repository after renaming the mixed productio
 history to private risingtides-agents. GitHub secret scanning and push protection
 are enabled. Updated the ecosystem map to distinguish reusable public packages,
 private production behavior, and private Bedrock data authority.
+
+time:      [16:39] [07-21-26]
+agent:     [ocean] [public provenance audit]
+worktree:  license-credits-20260721
+type:      security/public-boundary
+area:      assistants/bonzai
+
+Removed snapshot-specific branch counts, provider-specific handoff copy, and
+production-subject deletion heuristics from the public Bonzai package. Noise is
+now conservatively limited to unique commits with no changed files; all content-
+bearing branches remain work unless the operator decides otherwise. Verified the
+Python harness compiles and the public package no longer contains the discovered
+campaign/distribution signature.

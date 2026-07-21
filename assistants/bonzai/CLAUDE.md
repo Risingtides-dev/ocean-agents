@@ -28,9 +28,8 @@ prevents it.
 Three tiers, decided by the harness against each repo's default base:
 - **shipped** — 0 unique commits; every change already on main. **Always safe to
   delete.**
-- **noise** — unique commits but no real content: empty GitButler commits,
-  duplicate one-file PRD copies, standup logs, gitignore chores. Safe to delete
-  once the operator okays the category.
+- **noise** — unique commits with no changed files. Delete only after the
+  operator approves that conservative category.
 - **work** — unique commits with real content. **KEEP unless the operator
   explicitly says otherwise, per branch.** When classification is ambiguous,
   treat as work.
@@ -53,8 +52,8 @@ and confirm; the harness owns the irreversible git operations.
    "restore all real work". Open it for the operator. This is the artifact that
    makes branch sprawl legible to a human who can't read diffs.
 3. **Auto-prune the obvious.** `bin/bonzai prune <repo>... --apply` deletes
-   `shipped` branches (zero risk). Add `--noise` to also clear the junk
-   categories. Clears worktree blockers (`.claude/worktrees/...`) automatically.
+   `shipped` branches (zero risk). Add `--noise` to also clear that conservative
+   empty-change category. Clears linked-worktree blockers automatically.
 4. **Execute the operator's decisions.** When they export from the board,
    `bin/bonzai apply --decisions decisions.json` deletes only what they marked —
    and **re-confirms each is shipped/noise before deleting**, refusing any branch

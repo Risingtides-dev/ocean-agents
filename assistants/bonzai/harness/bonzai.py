@@ -18,8 +18,8 @@ Subcommands:
 
 Classification (per branch, vs its repo's default base):
   shipped : 0 unique commits — every change already on base. Always safe to drop.
-  noise   : unique commits but no real content (empty GitButler commits,
-            duplicate one-file PRD copies, standup logs, gitignore chores).
+  noise   : unique commits with no changed files. Deletion still requires explicit
+            operator approval through --noise or a reviewed decisions file.
   work    : unique commits with real content — KEEP unless told otherwise.
 """
 import json
@@ -77,23 +77,11 @@ def classify(repo, base, b):
     detail = {"commits": n, "files": files, "adds": adds, "dels": dels,
               "age": age, "iso": iso, "subjects": subs}
 
-    s = " ".join(subs)
-    head = subs[0] if subs else ""
-    noise = (
-        files == 0
-        or (re.search(r"GitButler Workspace Commit", s) and files == 0)
-        or (re.search(r"verify auto-deploy trigger", s) and adds == 827)
-        or (re.match(r"^docs: add Telegram sound distribution PRD$", head) and n == 1)
-        or re.match(r"^standup:", head)
-        or re.search(r"gitignore \.claude", s)
-        or re.match(r"^Resolve [0-9a-f]{8}-", head)
-    )
-    if noise:
-        tag = ("EMPTY" if files == 0 else
-               "DUP PRD" if "827" == str(adds) or "PRD" in s else
-               "STANDUP" if head.startswith("standup") else
-               "GITIGNORE" if "gitignore" in s else "TEST")
-        return "noise", tag, detail
+    # Stay repository-neutral and conservative: subject text is not evidence that
+    # a branch is disposable. Only a branch whose unique commits change no files
+    # enters the operator-approved noise lane; every content-bearing branch is work.
+    if files == 0:
+        return "noise", "EMPTY", detail
     return "work", "REAL WORK", detail
 
 
