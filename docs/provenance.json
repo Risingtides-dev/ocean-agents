@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "generated": "2026-07-21",
+  "repo": "ocean-agents",
+  "description": "Per-file source/license/hash inventory for the ocean-agents public release tree.",
+  "policy": {
+    "project_code_docs_and_non_brand_assets": "MIT OR Apache-2.0 (LICENSE)",
+    "brand_assets": "Excluded from the open-source grants; see TRADEMARKS.md",
+    "third_party_material": "Remains under the license recorded per asset and in NOTICE.md"
+  },
+  "third_party_assets_in_tree": 0,
+  "assets": [
+    {
+      "path": "assistants/bonzai/artifacts/triage-board.template.html",
+      "bytes": 11017,
+      "sha256": "40764c56fa809243b3979ccb00dc68a936521481ea95bd03be4d0599d07f5bee",
+      "category": "project_html_template",
+      "status": "project_dual_licensed",
+      "license": "MIT OR Apache-2.0 (LICENSE); embedded Ocean names, logos, wordmarks, and distinctive brand elements remain excluded (TRADEMARKS.md)"
+    }
+  ]
+}

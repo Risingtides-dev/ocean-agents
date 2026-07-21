@@ -13,6 +13,16 @@ company knowledge.
 Credentials and destinations are always runtime configuration and are never
 committed.
 
+## Licensing posture
+
+Project code, reusable profiles, package manifests, documentation, and
+project-authored non-brand assets are available under `MIT OR Apache-2.0` at the
+recipient's option (`LICENSE`). Ocean names, logos, wordmarks, and distinctive
+brand assets are excluded from those grants (`TRADEMARKS.md`). The per-file
+source/license/hash inventory is `docs/provenance.json`; `docs/PROVENANCE.md`
+summarizes it. Run `python3 scripts/check_release_readiness.py` as the launch
+gate. No license-pending or unknown classification is launch-ready.
+
 ## Assistants
 
 Ocean loads a generated `assistants/<SURFACE>/system.md` profile according to
@@ -57,6 +67,7 @@ python3 couriers/hub/router.py list
 
 - `make assistants-check`
 - `python3 couriers/hub/router.py list`
+- `python3 scripts/check_release_readiness.py`
 - `python3 -m py_compile` for changed Python files
 - validate changed Markdown links
 - run a secret scan before public release

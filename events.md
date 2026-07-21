@@ -35,3 +35,20 @@ now conservatively limited to unique commits with no changed files; all content-
 bearing branches remain work unless the operator decides otherwise. Verified the
 Python harness compiles and the public package no longer contains the discovered
 campaign/distribution signature.
+
+time:      [16:55] [07-21-26]
+agent:     [ocean] [launch licensing]
+worktree:  license-credits-20260721
+type:      legal/provenance
+area:      public launch
+
+Applied the approved Ocean Agents launch posture: project code, reusable
+profiles, package manifests, documentation, and project-authored non-brand
+assets are MIT OR Apache-2.0; Ocean names/logos/wordmarks and distinctive brand
+assets are excluded. Added root LICENSE, LICENSE-MIT, LICENSE-APACHE,
+TRADEMARKS.md, NOTICE.md, CREDITS.md, and CONTRIBUTING.md. Created the per-file
+provenance inventory (docs/provenance.json, docs/PROVENANCE.md) and the launch
+gate (scripts/check_release_readiness.py). Updated README and AGENTS.md to
+replace the "no license granted yet" placeholder with the accepted posture. The
+current release tree contains no vendored third-party code, fonts, icons, or
+media.

@@ -98,7 +98,18 @@ The public Ocean repositories are:
 team deployments. Ocean OS and every public package must remain useful without
 it. See [`docs/OCEAN_PROJECT_MAP.md`](docs/OCEAN_PROJECT_MAP.md).
 
-## License status
+## License, brand, and credits
 
-No repository-wide license has been granted yet. A license and contribution
-policy will be added after the provenance and governance review is complete.
+Ocean Agents code, reusable profiles, package manifests, documentation, and
+project-authored non-brand assets are available under [MIT or Apache-2.0](LICENSE),
+at your option. Ocean names, logos, wordmarks, and distinctive brand assets are
+excluded from those grants; see [`TRADEMARKS.md`](TRADEMARKS.md) for truthful and
+nominative use.
+
+The current release tree contains no vendored third-party libraries, fonts,
+icons, or media. See [`NOTICE.md`](NOTICE.md),
+[`docs/PROVENANCE.md`](docs/PROVENANCE.md), and
+[`docs/provenance.json`](docs/provenance.json) for the per-file provenance
+inventory. Meet the people and projects behind the repository in
+[`CREDITS.md`](CREDITS.md). Contribution terms are in
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
